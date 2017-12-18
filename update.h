@@ -1,4 +1,9 @@
-
+/*device path*/
+char *udisk="/dev/sda1";
+char *nand_device="/dev/nandblk0";
+char *mmc_device="/dev/mmcblk0";
+/*mount point*/
+static const char *mount_point="/sdcard";
 /*log path*/
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
 static const char *TEMPORARY_INSTALL_FILE = "/tmp/last_install";

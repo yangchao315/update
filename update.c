@@ -293,76 +293,71 @@ int update_bt(void){
 	return 0;
 }
 
+int mount_device(char *path)
+{
+	if (mount(path, mount_point, "vfat",MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
+			fprintf(serial_fp, "[recovery]mount %s failed!\n",path);
+			return -1;
+	}else{
+			fprintf(serial_fp, "[recovery]mount %s as vfat successed\n",path);
+		  	source_media=path;
+	    }
+	return 0;
+}
+
+
+int find_update_zip(void)
+{
+	if (access(UPDATE_PACKAGE_PATH, F_OK) ==0) {
+		fprintf(serial_fp, "[recovery]find update.zip in udisk!\n");
+		is_factory_production = true;//factory-mode means recovery from udisk or extern SD card
+	}else{
+		fprintf(serial_fp, "[recovery]no update.zip in udisk!\n");
+		umount(mount_point);	
+		sync();
+		return -1;
+	}
+	return 0;
+}
+
 int	main(int argc, char **argv) {
 	
-	mkdir("/sdcard", 755);//create /sdcard as the mount point,maybe we will use /mnt 
+	mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
 	serial_fp = fopen("/dev/ttySiRF1", "w");//A7 serial port
     if (serial_fp != NULL) fprintf(serial_fp, "[recovery]Open ttySiRF1 success!\n");
-	/**/
+	/*redirect stdout`stderr*/
     freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
     freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
 
     user_partno = 7;//maybe not
     sprintf(user_part_nand, "/dev/nandblk0p%d", user_partno);
     sprintf(user_part_sd, "/dev/mmcblk0p%d", user_partno);
-    sprintf(ext_user_part_sd, "/dev/mmcblk1p1");
 	
     FILE* f = NULL;
     usleep(10000);
-    if ((f = fopen("/dev/sda", "rb")) != NULL) {
+	
+    if (access(udisk, F_OK) ==0) {
 		fprintf(serial_fp, "[recovery]udisk exists\n");
-        fclose(f);
-		f = NULL;
 	/*mount udisk*/
-	if (mount("/dev/sda1", "/sdcard", "vfat",
-			MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-	  /*  if (mount("/dev/sda", "/sdcard", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0){
-	    	fprintf(serial_fp, "[recovery]mount /dev/sda or /dev/sda1 as vfat failed\n");} 
-		else {
-				fprintf(serial_fp, "[recovery]mount /dev/sda as vfat successed\n");
-				source_media="UDISK(vfat)";}*/
-	}else{
-			fprintf(serial_fp, "[recovery]mount /dev/sda1 as vfat successed\n");
-		  	source_media="udisk";
-	    }
+	mount_device(udisk);
 	/*find update.zip*/
-	    if ((f = fopen(UPDATE_PACKAGE_PATH, "rb")) == NULL) {
-	        fprintf(serial_fp, "[recovery]%s does not exist\n",UPDATE_PACKAGE_PATH);
-	        umount("/sdcard");
-	        is_factory_production = false;//factory-mode means recovery from udisk or extern SD card
-	        if ((f = fopen(user_part_nand, "rb")) != NULL) {
-	            if (mount(user_part_nand, "/sdcard", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0)
-	            {
-	               fprintf(serial_fp,"[recovery]mount %s as vfat failed\n", user_part_nand);
-	            }else {
-	            	fprintf(serial_fp,"[recovery]mount %s as vfat success\n", user_part_nand);
-			source_media=user_part_nand;
-	            }
-	            fclose(f);
-	            target_media = "/dev/nandblk0";
-	        } else if ((f = fopen(user_part_sd, "rb")) != NULL) {
-	            if (mount(user_part_sd, "/sdcard", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0)
-	            {
-			fprintf(serial_fp,"[recovery]mount %s as vfat failed\n", user_part_sd);
-	            }else {
-	            	fprintf(serial_fp,"[recovery]mount %s as vfat success\n", user_part_sd);
-			source_media=user_part_sd;
-	            }
-	            fclose(f);
-	            target_media = "/dev/mmcblk0";
-	        }
-	    }
-
-        if ((f = fopen("/dev/nandblk0", "rb")) != NULL) {
-            /* nand is inserted */
-            /* boot media is udisk, and nand in slot0 will be updated*/
-            target_media = "/dev/nandblk0";
-	    	fclose(f);
-        } else {
-            target_media = "/dev/mmcblk0";
+	find_update_zip();
+	/*find target media*/   
+    if (access(nand_device, F_OK) == 0) {
+        /* boot media is nand, and it will be updated*/
+        target_media = nand_device;
+	} else {
+        /* boot media is nand, and it will be updated*/
+		target_media = mmc_device;
 		}
         fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
-    } else if ((f = fopen(user_part_sd, "rb")) != NULL) {
+    }
+	/*install packages*/
+
+	/*******************/
+	/*******************/
+
+	else if ((f = fopen(user_part_sd, "rb")) != NULL) {
         /* sd boot and updated from its own user partition */
         target_media = "/dev/mmcblk0";
         fclose(f);
