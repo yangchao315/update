@@ -18,8 +18,8 @@
 #define VAL_STRING  1  // data will be NULL-terminated; size doesn't count null
 #define VAL_BLOB    2
 #define COMMIT_FLAG_ADDR 0x200000
-char *Uboot_Name = "/sdcard/update/u-boot.csr";
-char *Uboot_Path = "/dev/mmcblk0";
+char *Uboot_Name = "/media/disk/update/u-boot.csr";
+char *Uboot_Path = "/dev/nandblk0";
 typedef struct {
     int type;
     ssize_t size;
@@ -44,11 +44,11 @@ Value* WriteUbootFn(char* filename,char* partition) {
     if (strcmp(partition, "/dev/mmcblk0") == 0) is_emmc = true;
 
     if (strlen(partition) == 0) {
-        fprintf(stderr, "partition argument to %s can't be empty", partition);
+        fprintf(stderr, "[WriteUbootFn] partition argument to %s can't be empty", partition);
         goto done;
     }
     if (strlen(filename) == 0) {
-        fprintf(stderr, "file argument to %s can't be empty", filename);
+        fprintf(stderr, "[WriteUbootFn] file argument to %s can't be empty", filename);
         goto done;
     }
     bool success;
@@ -187,7 +187,7 @@ Value* WriteUbootFn(char* filename,char* partition) {
     }
     fflush(raw_f);
     fsync(fileno(raw_f));
-
+	fprintf(stderr, "[WriteUbootFn]fsync done! \n");
 done_malloc:
     fclose(f);
     f = NULL;
@@ -200,14 +200,17 @@ done_malloc:
     result = success ? partition : strdup("");
 
 done:
-    if (result != partition) free(partition);
-    free(filename);
+    if (result != partition) {
+		free(partition);
+    	free(filename);
+		}
+	fprintf(stderr, "[WriteUbootFn]before return \n");
     return StringValue(result);
 }
 
 
 int main(int argc, char **argv)
 {
-WriteUbootFn(Uboot_Name,Uboot_Path);
+	WriteUbootFn(Uboot_Name,Uboot_Path);
 return 0;
 }
