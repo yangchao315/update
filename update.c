@@ -1,36 +1,3 @@
-/*
- * Copyright (C) 2007 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <limits.h>
-#include <linux/input.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/mount.h>
-#include <time.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <stdbool.h>
-
 #include "update.h"
 
 #define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
@@ -38,6 +5,155 @@
 
 #define false 0
 #define true  1
+
+ssize_t safe_read(int fd, void *buf, size_t count)
+{
+    ssize_t n;
+
+    do {
+        n = read(fd, buf, count);
+    } while (n < 0 && errno == EINTR);
+
+    return n;
+}
+
+ssize_t safe_write(int fd, const void *buf, size_t count)
+{
+    ssize_t n;
+
+    do {
+        n = write(fd, buf, count);
+    } while (n < 0 && errno == EINTR);
+
+    return n;
+}
+ssize_t full_write(int fd, const void *buf, size_t len, size_t obs)
+{
+    ssize_t cc;
+    ssize_t total;
+
+    total = 0;
+
+    while (len) {
+        cc = safe_write(fd, buf, len);
+
+        if (cc < 0) {
+            if (total) {
+                /* we already wrote some! */
+                /* user can do another write to know the error code */
+                return total;
+            }
+            printf("[recovery] write error\n");
+            return cc;  /* write() returns -1 on failure. */
+        }
+
+        total += cc;
+        buf = ((const char *)buf) + cc;
+        len -= cc;
+    }
+
+    return total;
+}
+void* xmalloc(size_t size)
+{
+    void *ptr = malloc(size);
+    if (ptr == NULL && size != 0)
+        exit(-1);
+    return ptr;
+}
+
+int simple_dd(const char *infile, const char *outfile, ssize_t seek, ssize_t bs, ssize_t count,
+              ssize_t skip)
+	{
+		size_t ibs = bs;
+		size_t obs = bs;
+		char *ibuf;
+		char *obuf;
+		ssize_t n;
+		int in_fd = -1;
+		int out_fd = -1;
+		struct stat file_st;
+		off_t file_size;
+		off_t write_total = 0;
+	
+		ibuf = xmalloc(ibs);
+		obuf = ibuf;
+	
+		in_fd = open(infile, O_RDONLY, 0666);
+		if (in_fd < 0) {
+			printf("[recovery] dd infile open error\n");
+			return -1;
+		}
+	
+	
+		if (fstat(in_fd, &file_st) < 0) {
+			printf("[recovery] cannot stat file!\n");
+			return -1;
+		}
+	
+		file_size = file_st.st_size;
+	
+		out_fd = open(outfile, O_WRONLY | O_CREAT, 0666);
+		if (in_fd < 0) {
+			printf("[recovery] dd outfile open error\n");
+			return -1;
+		}
+	
+		if (skip) {
+			if (lseek(in_fd, skip * ibs, SEEK_CUR) < 0) {
+				do {
+					ssize_t n = safe_read(in_fd, ibuf, ibs);
+					if (n < 0)
+						return -1;
+					if (n == 0)
+						break;
+				} while (--skip != 0);
+			}
+		}
+	
+		if (seek) {
+			if (lseek(out_fd, seek * obs, SEEK_CUR) < 0)
+			{
+				printf("[recovery] seek error\n");
+				return -1;
+			}
+		}
+	
+		while (!count || in_full + in_part != count)
+		{
+			n = safe_read(in_fd, ibuf, ibs);
+			if (n == 0) {
+				printf("[recovery] read finish\n");
+				break;
+			}
+			else if (n < 0) {
+				printf("[recovery] read error\n");
+				return -1;
+			}
+	
+			if (n != ibs) {
+				in_part++;
+				memset(ibuf + n, 0, ibs - n);
+				n = ibs;
+			} else {
+				in_full++;
+			}
+	
+			write_total += full_write(out_fd, ibuf, n, obs);
+			if (file_size != 0)
+			{
+				//update_complete_cb(updateType, RET_ON , (write_total * 100 / file_size) / updateStepCount + *pUpdateProcess);
+				printf("[recovery] file_size != 0\n");
+			}
+		}
+	
+		if (fsync(out_fd) < 0) {
+			printf("[recovery] fsync error\n");
+			return -1;
+		}
+	
+		return 0;
+	}
 
 static int really_install_package(const char *path, int* wipe_cache)
 {
@@ -391,7 +507,7 @@ int	main(int argc, char **argv) {
 
 /**set recovery start flag 0x5a**/
     set_flag(target_media, RFLAG_ADDR, RFLAG_START);
-    fprintf(serial_fp, "\n[recovery]Set recovery start flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
+		fprintf(serial_fp, "\n[recovery]Set recovery start flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
 
 /**get update.zip path && install it**/
     update_package = UPDATE_PACKAGE_PATH;
@@ -420,8 +536,8 @@ int	main(int argc, char **argv) {
    // sync();
 
 /**set recovery finish flag 0xa5**/
-    set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
-    fprintf(serial_fp, "\n[recovery]Set recovery finish flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
+   set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
+   		fprintf(serial_fp, "\n[recovery]Set recovery finish flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
 
 
 	if (status == INSTALL_SUCCESS){

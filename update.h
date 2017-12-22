@@ -1,3 +1,20 @@
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <limits.h>
+#include <linux/input.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/mount.h>
+#include <time.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <stdbool.h>
+
 /*device path*/
 char *udisk="/dev/sda1";
 char *nand_device="/dev/nandblk0";
@@ -26,6 +43,9 @@ static const char *BT_MAC_PATH="/boot/bt.inf";
 static const char *BT_MAC_PATH2="/root/var/lib/trail/bt.inf";
 static const char *BT_MAC_PATH3="/boot/trail.inf";
 static const char *BT_SYNERGY_PATH="/btmp2/var/lib/csr_synergy/bt.inf";
+
+static ssize_t in_full;
+static ssize_t in_part;
 
 FILE *serial_fp = NULL;
 int user_partno = 0;
