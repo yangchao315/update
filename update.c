@@ -723,8 +723,8 @@ int	main(int argc, char **argv) {
 		fprintf(serial_fp, "[recovery]recovery failed\n");
         fprintf(serial_fp, "[recovery]For more log information, please check %s now\n", TEMPORARY_LOG_FILE);    	 
 		}
-	if(0==umount("/sdcard"))
+	if(0==umount("/sdcard")){
 		remove("/sdcard");
-		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");
+		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");}
     return EXIT_SUCCESS;
 }
