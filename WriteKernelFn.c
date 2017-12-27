@@ -42,12 +42,11 @@ copy_file(const char* source, const char* destination) {
 
 int pox_system(const char *cmd_line)
 {
-    int ret = 0;
-    //sighandler_t old_handler;
-
-   // old_handler = signal(SIGCHLD, SIG_DFL);
-    ret = system(cmd_line);
-   // signal(SIGCHLD, old_handler);
+	int ret = 0;
+	__sighandler_t old_handler;
+	old_handler = signal(SIGCHLD, SIG_DFL);
+	ret = system(cmd_line);
+	signal(SIGCHLD, old_handler);
 
     return ret;
 }
