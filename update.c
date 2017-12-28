@@ -52,22 +52,23 @@ static int get_flag(const char* target_media, int offset)
 int mount_device(char* location,const char* mount_point,char* fs_type)
 {
 	int status=0;
+	/*check mount_point whether existed*/
 	if(NULL==opendir(mount_point)){
-		pox_system("mount -o remount rw /");
 		status=mkdir(mount_point,0755);
 			if(-1==status){
-				fprintf(serial_fp, "[mount_device]mkdir failed!\n ERROR in %s \n",strerror(errno));
-				return -1;
+				fprintf(stderr, "[mount_device]mkdir failed!\n ERROR in %s \n",strerror(errno));
+				return status;
 			}else{
-				fprintf(serial_fp, "[mount_device]mkdir %s successed\n",mount_point);
+				fprintf(stderr, "[mount_device]mkdir %s successed\n",mount_point);
 			}
 	}
+	/*mount*/
 	if (mount(location, mount_point, fs_type,
 			MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-		fprintf(serial_fp, "[mount_device]failed to mount %s at %s !\n",location,mount_point);
+		fprintf(stderr, "[mount_device]failed to mount %s at %s !\n",location,mount_point);
 		return -1;
 	}else{
-		fprintf(serial_fp, "[mount_device]mount %s at %s successed\n",location,mount_point);
+		fprintf(stderr, "[mount_device]mount %s at %s successed\n",location,mount_point);
 		source_media=location;
 	    }
 	return 0;
@@ -80,16 +81,16 @@ int update_bt(void){
 	f_bt2=fopen(BT_MAC_BACKUP_PATH2, "rb");
 	
 	if((f_bt1!=NULL)&&(f_bt2!=NULL)){
-		fprintf(stderr,"[recovery]prepare to copy bt files ...\n");
+		fprintf(serial_fp,"[recovery]prepare to copy bt files ...\n");
 		
 		sprintf(user_part, "%sp2", target_media);//mount boot partition
 		mkdir("/btmp1", 0755);
 		if (mount(user_part, "/btmp1", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-			fprintf(stderr, "[recovery]mount %s to /btmp1 failed!\n",user_part);
+			fprintf(serial_fp, "[recovery]mount %s to /btmp1 failed!\n",user_part);
 		} else{
-			fprintf(stderr, "[recovery]mount %s to /btmp1 success!\n",user_part);
+			fprintf(serial_fp, "[recovery]mount %s to /btmp1 success!\n",user_part);
 			copy_file(BT_MAC_BACKUP_PATH,"/btmp1/bt.inf");
-			fprintf(stderr, "[recovery]copy bt.inf done\n");
+			fprintf(serial_fp, "[recovery]copy bt.inf done\n");
 			copy_file(BT_MAC_BACKUP_PATH2,"/btmp1/trail.inf");
 			if(NULL!=fopen(BT_MAC_PATH3, "rb")){
 				fprintf(serial_fp, "[recovery]copy trail.inf to %s done-----1111\n",user_part); 
@@ -99,9 +100,9 @@ int update_bt(void){
 		sprintf(user_part, "%sp3", target_media);//mount root partition
 		mkdir("/btmp2", 0755);
 		if (mount(user_part, "/btmp2", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-			fprintf(stderr, "[recovery]mount %s to /btmp2 failed!\n",user_part);
+			fprintf(serial_fp, "[recovery]mount %s to /btmp2 failed!\n",user_part);
 		} else {
-			fprintf(stderr, "[recovery]mount %s to /btmp2 success!\n",user_part);
+			fprintf(serial_fp, "[recovery]mount %s to /btmp2 success!\n",user_part);
 			copy_file(BT_MAC_BACKUP_PATH2,"/btmp2/var/lib/trail/bt.inf");
 			if(NULL!=fopen(BT_MAC_PATH2, "rb")){
 				fprintf(serial_fp, "[recovery]copy trail.inf to %s done-----1111\n",user_part); 
@@ -131,12 +132,13 @@ int find_update_zip(void)
 		is_factory_production = true;//factory-mode means recovery from udisk or extern SD card
 	}else{
 		fprintf(serial_fp, "[recovery]no update.zip in udisk!\n");
-		umount(mount_point);	
+		//umount(mount_point);	
 		sync();
 		return -1;
 	}
 	return 0;
 }
+
 #define COMMIT_FLAG_ADDR 0x200000
 char *Uboot_Name = "/sdcard/update/u-boot.csr";
 char *Uboot_Path = "/dev/nandblk0";
@@ -312,11 +314,53 @@ done:
 	fprintf(stderr, "[WriteUbootFn]write u-boot.csr successed! \n");
     return result;
 }
+char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
+#define MOUNT_KERNEL_PATH   "mount /dev/nandblk0p2 /mnt/"
+
+int WriteKernelFn()
+{
+	int ret=0;
+	/*mount boot partition to /mnt*/
+	ret=pox_system(MOUNT_KERNEL_PATH);
+    if (!ret) {
+        printf("[WriteKernelFn] Mount kernel path success!\n");
+    }
+    else {
+        printf("[WriteKernelFn] Mount kernel path failed!\n");
+    }
+	/*access if kernel_file exist */
+	if(access(Kernel_File, F_OK) == 0){
+		char cmd_line[128];
+		fprintf(stderr, "[WriteKernelFn]find %s in udisk!\n",Kernel_File);
+		sprintf(cmd_line, "%s%s%s", "tar -jxvf ", Kernel_File," -C /tmp");
+		pox_system(cmd_line);
+		
+	/*update kernel & dtb*/
+		copy_file("/tmp/zImage","/mnt/zImage-v1");
+		copy_file("/tmp/zImage","/mnt/zImage-v2");
+		pox_system("sync");
+		copy_file("/tmp/dtb","/mnt/dtb-v1");
+		copy_file("/tmp/dtb","/mnt/dtb-v2");	
+		pox_system("sync");
+	}else{
+		printf("[WriteKernelFn] no Kernel file !\n");
+	}
+
+	if(0==umount("/mnt")){
+		printf("[WriteKernelFn]umount /mnt success!\n");
+	}
+	return 0;
+}
 
 
 int	main(int argc, char **argv) {
+	const char *send_intent = NULL;
+    const char *update_package = NULL;
+    int  wipe_cache = 0;
+    int status = INSTALL_SUCCESS;
 	
-	mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
+	pox_system("mount -o remount rw /");
+	//mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
 	serial_fp = fopen("/dev/ttySiRF1", "w");//A7 serial port
     if (serial_fp != NULL) fprintf(serial_fp, "[recovery]Open ttySiRF1 success!\n");
 	/*redirect stdout`stderr*/
@@ -335,7 +379,9 @@ int	main(int argc, char **argv) {
 	/*mount udisk*/
 	mount_device(udisk,mount_point,"vfat");
 	/*find update.zip*/
-	find_update_zip();
+	if(-1==find_update_zip()){
+		fprintf(serial_fp, "[recovery]can`t find update.zip\n");
+	};
 	/*find target media*/   
     if (access(nand_device, F_OK) == 0) {
         /* boot media is nand, and it will be updated*/
@@ -345,14 +391,12 @@ int	main(int argc, char **argv) {
 		target_media = mmc_device;
 		}
         fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
-    }
+    }else{
+		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
+	}
 	/*install packages*/
     mkdir("/sdcard/cache", 755);
-    const char *send_intent = NULL;
-    const char *update_package = NULL;
-    int  wipe_cache = 0;
 
-    int status = INSTALL_SUCCESS;
 
 /**set recovery start flag 0x5a**/
     set_flag(target_media, RFLAG_ADDR, RFLAG_START);
@@ -363,6 +407,7 @@ int	main(int argc, char **argv) {
 	//status = install_package(UPDATE_PACKAGE_PATH, &wipe_cache, TEMPORARY_INSTALL_FILE);
 
 		WriteUbootFn(Uboot_Name,Uboot_Path);
+		WriteKernelFn();
 /* update update.zip */
 	if(status == INSTALL_SUCCESS) {
             sprintf(user_part, "%sp7", target_media);
