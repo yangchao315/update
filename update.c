@@ -1,315 +1,7 @@
 #include "update.h"
 
-#define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
-#define printf(...) fprintf(stdout, "I:" __VA_ARGS__)
-
-#define false 0
-#define true  1
-
-ssize_t safe_read(int fd, void *buf, size_t count)
-{
-    ssize_t n;
-
-    do {
-        n = read(fd, buf, count);
-    } while (n < 0 && errno == EINTR);
-
-    return n;
-}
-
-ssize_t safe_write(int fd, const void *buf, size_t count)
-{
-    ssize_t n;
-
-    do {
-        n = write(fd, buf, count);
-    } while (n < 0 && errno == EINTR);
-
-    return n;
-}
-ssize_t full_write(int fd, const void *buf, size_t len, size_t obs)
-{
-    ssize_t cc;
-    ssize_t total;
-
-    total = 0;
-
-    while (len) {
-        cc = safe_write(fd, buf, len);
-
-        if (cc < 0) {
-            if (total) {
-                /* we already wrote some! */
-                /* user can do another write to know the error code */
-                return total;
-            }
-            printf("[recovery] write error\n");
-            return cc;  /* write() returns -1 on failure. */
-        }
-
-        total += cc;
-        buf = ((const char *)buf) + cc;
-        len -= cc;
-    }
-
-    return total;
-}
-void* xmalloc(size_t size)
-{
-    void *ptr = malloc(size);
-    if (ptr == NULL && size != 0)
-        exit(-1);
-    return ptr;
-}
-
-int simple_dd(const char *infile, const char *outfile, ssize_t seek, ssize_t bs, ssize_t count,
-              ssize_t skip)
-	{
-		size_t ibs = bs;
-		size_t obs = bs;
-		char *ibuf;
-		char *obuf;
-		ssize_t n;
-		int in_fd = -1;
-		int out_fd = -1;
-		struct stat file_st;
-		off_t file_size;
-		off_t write_total = 0;
-	
-		ibuf = xmalloc(ibs);
-		obuf = ibuf;
-	
-		in_fd = open(infile, O_RDONLY, 0666);
-		if (in_fd < 0) {
-			printf("[recovery] dd infile open error\n");
-			return -1;
-		}
-	
-	
-		if (fstat(in_fd, &file_st) < 0) {
-			printf("[recovery] cannot stat file!\n");
-			return -1;
-		}
-	
-		file_size = file_st.st_size;
-	
-		out_fd = open(outfile, O_WRONLY | O_CREAT, 0666);
-		if (in_fd < 0) {
-			printf("[recovery] dd outfile open error\n");
-			return -1;
-		}
-	
-		if (skip) {
-			if (lseek(in_fd, skip * ibs, SEEK_CUR) < 0) {
-				do {
-					ssize_t n = safe_read(in_fd, ibuf, ibs);
-					if (n < 0)
-						return -1;
-					if (n == 0)
-						break;
-				} while (--skip != 0);
-			}
-		}
-	
-		if (seek) {
-			if (lseek(out_fd, seek * obs, SEEK_CUR) < 0)
-			{
-				printf("[recovery] seek error\n");
-				return -1;
-			}
-		}
-	
-		while (!count || in_full + in_part != count)
-		{
-			n = safe_read(in_fd, ibuf, ibs);
-			if (n == 0) {
-				printf("[recovery] read finish\n");
-				break;
-			}
-			else if (n < 0) {
-				printf("[recovery] read error\n");
-				return -1;
-			}
-	
-			if (n != ibs) {
-				in_part++;
-				memset(ibuf + n, 0, ibs - n);
-				n = ibs;
-			} else {
-				in_full++;
-			}
-	
-			write_total += full_write(out_fd, ibuf, n, obs);
-			if (file_size != 0)
-			{
-				//update_complete_cb(updateType, RET_ON , (write_total * 100 / file_size) / updateStepCount + *pUpdateProcess);
-				printf("[recovery] file_size != 0\n");
-			}
-		}
-	
-		if (fsync(out_fd) < 0) {
-			printf("[recovery] fsync error\n");
-			return -1;
-		}
-	
-		return 0;
-	}
-
-static int really_install_package(const char *path, int* wipe_cache)
-{
-    printf("Update location: %s\n", path);
-    /* Try to open the package*/
-    
-    /* Verify and install the contents of the package.
-     */
-
-   // return try_update_binary(path, &zip, wipe_cache);
-   return	INSTALL_SUCCESS;
-}
-
-int install_package(const char* path, int* wipe_cache, const char* install_file)
-{
-    FILE* install_log = fopen_path(install_file, "w");
-    if (install_log) {
-        fputs(path, install_log);
-        fputc('\n', install_log);
-    } else {
-        printf("failed to open last_install: %s\n", strerror(errno));
-    }
-    int result = really_install_package(path, wipe_cache);
-    if (install_log) {
-        fputc(result == INSTALL_SUCCESS ? '1' : '0', install_log);
-        fputc('\n', install_log);
-        fclose(install_log);
-    }
-    return result;
-}
-
-
-static const int MAX_ARG_LENGTH = 4096;
-static const int MAX_ARGS = 100;
-
-// open a given path, mounting partitions as necessary
-FILE* fopen_path(const char *path, const char *mode) {
-    FILE *fp = fopen(path, mode);
-    return fp;
-}
-
-// close a file, log an error if the error indicator is set
-static void
-check_and_fclose(FILE *fp, const char *name) {
-    fflush(fp);
-    if (ferror(fp)) printf("Error in %s\n(%s)\n", name, strerror(errno));
-    fclose(fp);
-}
-
-// How much of the temp log we have copied to the copy in cache.
-static long tmplog_offset = 0;
-
-static void
-copy_log_file(const char* source, const char* destination, int append) {
-    FILE *log = fopen_path(destination, append ? "a" : "w");
-    if (log == NULL) {
-        printf("Can't open %s\n", destination);
-    } else {
-        FILE *tmplog = fopen(source, "r");
-        if (tmplog != NULL) {
-            if (append) {
-                fseek(tmplog, tmplog_offset, SEEK_SET);  // Since last write
-            }
-            char buf[4096];
-            while (fgets(buf, sizeof(buf), tmplog)) fputs(buf, log);
-            if (append) {
-                tmplog_offset = ftell(tmplog);
-            }
-            check_and_fclose(tmplog, source);
-        }
-        check_and_fclose(log, destination);
-    }
-}
-
-static void
-copy_file(const char* source, const char* destination) {
-    char buf[4096];
-    int bytes_in, bytes_out;
-    int src_len = 0;
-    int dst_len = 0;
-    FILE *dst = fopen(destination, "wb");
-    if (dst == NULL) {
-        printf("Can't open %s\n", destination);
-    } else {
-        FILE *src = fopen(source, "rb");
-        if (src != NULL) {
-            fseek(src, 0, SEEK_SET);  // Since last write
-	    while ((bytes_in = fread(buf, 1, 4096, src)) > 0 ) {
-                src_len += bytes_in;
-                bytes_out = fwrite (buf, 1, bytes_in, dst);
-		dst_len += bytes_out;
-            }
-	    printf("Copy %d, Copied %d\n", src_len, dst_len);
-            check_and_fclose(src, source);
-        }
-        check_and_fclose(dst, destination);
-    }
-}
-
-
-// clear the recovery command and prepare to boot a (hopefully working) system,
-// copy our log file to cache as well (for the system to read), and
-// record any intent we were asked to communicate back to the system.
-// this function is idempotent: call it as many times as you like.
-static void
-finish_recovery(const char *send_intent) {
-    // By this point, we're ready to return to the main system...
-    if (send_intent != NULL) {
-        FILE *fp = fopen_path(INTENT_FILE, "w");
-        if (fp == NULL) {
-            printf("Can't open %s\n", INTENT_FILE);
-        } else {
-            fputs(send_intent, fp);
-            check_and_fclose(fp, INTENT_FILE);
-        }
-    }
-    // Copy logs to cache so the system can find out what happened.
-    copy_log_file(TEMPORARY_LOG_FILE, LOG_FILE, true);
-    copy_log_file(TEMPORARY_LOG_FILE, LAST_LOG_FILE, false);
-    copy_log_file(TEMPORARY_INSTALL_FILE, LAST_INSTALL_FILE, false);
-    chmod(LOG_FILE, 0600);
-    //chown(LOG_FILE, 1000, 1000);   // system user
-    chmod(LAST_LOG_FILE, 0640);
-    chmod(LAST_INSTALL_FILE, 0644);
-}
-
-static int compare_string(const void* a, const void* b) {
-    return strcmp(*(const char**)a, *(const char**)b);
-}
-
-static void
-print_property(const char *key, const char *name, void *cookie) {
-    printf("%s=%s\n", key, name);
-}
-
-static char *sirfsoc_get_os_type(){
-	char *p, *os_type;
-	char cmdline_str[BUFSIZ];
-	FILE *cmdline_fp;
-
-	cmdline_fp = fopen("/proc/cmdline", "r");
-	if (cmdline_fp == NULL)  {
-		return NULL;
-	}
-	fread(cmdline_str, 1, BUFSIZ, cmdline_fp);
-
-	p = strstr(cmdline_str, "os_type");
-	while(*p++ != '=');
-	os_type = p;
-	while((*p != ' ') && (*p != '\0')) p++;
-	*p = '\0';
-	return os_type;
-}
-
-#define RFLAG_ADDR	0x0027f000 /* 2.5MB-4096 */
-#define RFLAG_START	0x5a
+#define RFLAG_ADDR		0x0027f000 /* 2.5MB-4096 */
+#define RFLAG_START		0x5a
 #define RFLAG_FINISH	0xa5
 static void set_flag(const char* target_media,
 		int offset, int flag)
@@ -356,6 +48,29 @@ static int get_flag(const char* target_media, int offset)
 	fclose(f);
 	f = NULL;
 	return flag;
+}
+int mount_device(char* location,const char* mount_point,char* fs_type)
+{
+	int status=0;
+	if(NULL==opendir(mount_point)){
+		pox_system("mount -o remount rw /");
+		status=mkdir(mount_point,0755);
+			if(-1==status){
+				fprintf(serial_fp, "[mount_device]mkdir failed!\n ERROR in %s \n",strerror(errno));
+				return -1;
+			}else{
+				fprintf(serial_fp, "[mount_device]mkdir %s successed\n",mount_point);
+			}
+	}
+	if (mount(location, mount_point, fs_type,
+			MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
+		fprintf(serial_fp, "[mount_device]failed to mount %s at %s !\n",location,mount_point);
+		return -1;
+	}else{
+		fprintf(serial_fp, "[mount_device]mount %s at %s successed\n",location,mount_point);
+		source_media=location;
+	    }
+	return 0;
 }
 
 int update_bt(void){
@@ -408,19 +123,6 @@ int update_bt(void){
 		}
 	return 0;
 }
-
-int mount_device(char *path)
-{
-	if (mount(path, mount_point, "vfat",MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-			fprintf(serial_fp, "[recovery]mount %s failed!\n",path);
-			return -1;
-	}else{
-			fprintf(serial_fp, "[recovery]mount %s as vfat successed\n",path);
-		  	source_media=path;
-	    }
-	return 0;
-}
-
 
 int find_update_zip(void)
 {
@@ -611,6 +313,7 @@ done:
     return result;
 }
 
+
 int	main(int argc, char **argv) {
 	
 	mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
@@ -630,7 +333,7 @@ int	main(int argc, char **argv) {
     if (access(udisk, F_OK) ==0) {
 		fprintf(serial_fp, "[recovery]udisk exists\n");
 	/*mount udisk*/
-	mount_device(udisk);
+	mount_device(udisk,mount_point,"vfat");
 	/*find update.zip*/
 	find_update_zip();
 	/*find target media*/   
@@ -644,36 +347,6 @@ int	main(int argc, char **argv) {
         fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
     }
 	/*install packages*/
-
-	/*******************/
-	/*******************/
-#if 0
-	else if ((f = fopen(user_part_sd, "rb")) != NULL) {
-        /* sd boot and updated from its own user partition */
-        target_media = "/dev/mmcblk0";
-        fclose(f);
-		f = NULL;
-        if (mount(user_part_sd, "/sdcard", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0)
-        {
-		fprintf(serial_fp, "[recovery]mount %s as vfat failed\n", user_part_sd);
-        }else {
-        	fprintf(serial_fp, "[recovery]mount %s as vfat success\n", user_part_sd);
-        }
-		fprintf(serial_fp, "[recovery]Recovery from SD internal user partition to %s\n", target_media);
-    } else {
-        /*  nand boot and updated from its own user partition */
-        target_media = "/dev/nandblk0";
-        if (mount(user_part_nand, "/sdcard", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0)
-        {
-			fprintf(serial_fp, "[recovery]mount %s failed\n", user_part_nand);
-        }else
-        {	
-        	fprintf(serial_fp, "[recovery]mount %s success\n", user_part_nand);	
-        }
-		fprintf(serial_fp, "[recovery]Recovery from Nand internal user partition to %s\n", target_media);
-    }
-#endif
-
     mkdir("/sdcard/cache", 755);
     const char *send_intent = NULL;
     const char *update_package = NULL;

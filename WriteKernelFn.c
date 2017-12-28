@@ -1,56 +1,7 @@
-#include <signal.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <errno.h>
+#include "common.h"
 
 char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
 #define MOUNT_KERNEL_PATH   "mount /dev/nandblk0p2 /mnt/"
-
-static void
-check_and_fclose(FILE *fp, const char *name) {
-    fflush(fp);
-    if (ferror(fp)) printf("Error in %s\n(%s)\n", name, strerror(errno));
-    fclose(fp);
-}
-
-static void
-copy_file(const char* source, const char* destination) {
-    char buf[4096];
-    int bytes_in, bytes_out;
-    int src_len = 0;
-    int dst_len = 0;
-    FILE *dst = fopen(destination, "wb");
-    if (dst == NULL) {
-        printf("Can't open %s\n", destination);
-    } else {
-        FILE *src = fopen(source, "rb");
-        if (src != NULL) {
-            fseek(src, 0, SEEK_SET);  // Since last write
-	    while ((bytes_in = fread(buf, 1, 4096, src)) > 0 ) {
-                src_len += bytes_in;
-                bytes_out = fwrite (buf, 1, bytes_in, dst);
-		dst_len += bytes_out;
-            }
-	    printf("Copy %d, Copied %d\n", src_len, dst_len);
-            check_and_fclose(src, source);
-        }
-        check_and_fclose(dst, destination);
-    }
-}
-
-
-
-int pox_system(const char *cmd_line)
-{
-	int ret = 0;
-	__sighandler_t old_handler;
-	old_handler = signal(SIGCHLD, SIG_DFL);
-	ret = system(cmd_line);
-	signal(SIGCHLD, old_handler);
-
-    return ret;
-}
-
 
 int WriteKernelFn()
 {
