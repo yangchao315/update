@@ -418,7 +418,7 @@ int	main(int argc, char **argv) {
 		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
 	}
 
-	/*set recovery start flag 0x5**/
+	/*set recovery start flag 0x5a*/
     set_flag(target_media, RFLAG_ADDR, RFLAG_START);
 		fprintf(serial_fp, "\n[recovery]Set recovery start flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
 

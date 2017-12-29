@@ -9,8 +9,14 @@ static const char *mount_point="/sdcard";
 char *App_File = "/sdcard/update/APP_Update.tar.bz2";
 char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
 
+#ifdef EMMC_VER
+#define	MOUNT_APP_PATH   "mount /dev/mmcblk0p3 /mnt/"
+#define MOUNT_KERNEL_PATH   "mount /dev/mmcblk0p2 /mnt/"
+#else
 #define MOUNT_APP_PATH   "mount /dev/nandblk0p3 /mnt/"
 #define MOUNT_KERNEL_PATH   "mount /dev/nandblk0p2 /mnt/"
+#endif
+
 
 /*zip package path*/
 static const char *UPDATE_PACKAGE_PATH = "/sdcard/update/update.zip";
@@ -35,7 +41,7 @@ int user_partno = 0;
 bool is_factory_production = false;
 const char *target_media = NULL;
 const char *source_media = NULL;
-char user_part[16],user_part_nand[16], user_part_sd[16], ext_user_part_sd[16];
+char user_part[16],user_part_nand[16], user_part_sd[16];
 
 
 
