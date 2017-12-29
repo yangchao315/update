@@ -29,7 +29,7 @@ void copy_file(const char* source, const char* destination) {
     int dst_len = 0;
     FILE *dst = fopen(destination, "wb");
     if (dst == NULL) {
-        printf("Can't open %s\n", destination);
+        printf("[copy_file]Can't open %s\n", destination);
     } else {
         FILE *src = fopen(source, "rb");
         if (src != NULL) {
@@ -39,7 +39,7 @@ void copy_file(const char* source, const char* destination) {
                 bytes_out = fwrite (buf, 1, bytes_in, dst);
 		dst_len += bytes_out;
             }
-	    printf("Copy %d, Copied %d\n", src_len, dst_len);
+	    printf("[copy_file]Copy %d, Copied %d\n", src_len, dst_len);
             check_and_fclose(src, source);
         }
         check_and_fclose(dst, destination);
@@ -64,32 +64,12 @@ char *sirfsoc_get_os_type(){
 	*p = '\0';
 	return os_type;
 }
-
-void finish_recovery(const char *send_intent) {
-    // By this point, we're ready to return to the main system...
-    if (send_intent != NULL) {
-        FILE *fp = fopen_path(INTENT_FILE, "w");
-        if (fp == NULL) {
-            printf("Can't open %s\n", INTENT_FILE);
-        } else {
-            fputs(send_intent, fp);
-            check_and_fclose(fp, INTENT_FILE);
-        }
-    }
-    // Copy logs to cache so the system can find out what happened.
-    copy_log_file(TEMPORARY_LOG_FILE, LOG_FILE, true);
-    copy_log_file(TEMPORARY_LOG_FILE, LAST_LOG_FILE, false);
-    copy_log_file(TEMPORARY_INSTALL_FILE, LAST_INSTALL_FILE, false);
-    chmod(LOG_FILE, 0600);
-    //chown(LOG_FILE, 1000, 1000);   // system user
-    chmod(LAST_LOG_FILE, 0640);
-    chmod(LAST_INSTALL_FILE, 0644);
-}
 // open a given path, mounting partitions as necessary
 FILE* fopen_path(const char *path, const char *mode) {
     FILE *fp = fopen(path, mode);
     return fp;
 }
+
 // How much of the temp log we have copied to the copy in cache.
 long tmplog_offset = 0;
 
@@ -113,5 +93,25 @@ void copy_log_file(const char* source, const char* destination, int append) {
         check_and_fclose(log, destination);
     }
 }
+
+void finish_recovery(const char *send_intent) {
+    // By this point, we're ready to return to the main system...
+    if (send_intent != NULL) {
+        FILE *fp = fopen_path(INTENT_FILE, "w");
+        if (fp == NULL) {
+            printf("Can't open %s\n", INTENT_FILE);
+        } else {
+            fputs(send_intent, fp);
+            check_and_fclose(fp, INTENT_FILE);
+        }
+    }
+    // Copy logs to cache so the system can find out what happened.
+    copy_log_file(TEMPORARY_LOG_FILE, LOG_FILE, true);
+    copy_log_file(TEMPORARY_LOG_FILE, LAST_LOG_FILE, false);
+    chmod(LOG_FILE, 0600);
+    chmod(LAST_LOG_FILE, 0640);
+}
+
+
 
 

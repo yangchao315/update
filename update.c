@@ -128,20 +128,15 @@ int update_bt(void){
 int find_update_zip(void)
 {
 	if (access(UPDATE_PACKAGE_PATH, F_OK) ==0) {
-		fprintf(serial_fp, "[recovery]find update.zip in udisk!\n");
+		fprintf(stderr, "[recovery]find update.zip in udisk!\n");
 		is_factory_production = true;//factory-mode means recovery from udisk or extern SD card
 	}else{
-		fprintf(serial_fp, "[recovery]no update.zip in udisk!\n");
-		//umount(mount_point);	
+		fprintf(stderr, "[recovery]no update.zip in udisk!\n");	
 		sync();
 		return -1;
 	}
 	return 0;
 }
-
-#define COMMIT_FLAG_ADDR 0x200000
-char *Uboot_Name = "/sdcard/update/u-boot.csr";
-char *Uboot_Path = "/dev/nandblk0";
 
 char* WriteUbootFn(char* filename,char* partition) {
     char* result = NULL;
@@ -314,8 +309,6 @@ done:
 	fprintf(stderr, "[WriteUbootFn]write u-boot.csr successed! \n");
     return result;
 }
-char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
-#define MOUNT_KERNEL_PATH   "mount /dev/nandblk0p2 /mnt/"
 
 int WriteKernelFn()
 {
@@ -328,7 +321,7 @@ int WriteKernelFn()
     else {
         printf("[WriteKernelFn] Mount kernel path failed!\n");
     }
-	/*access if kernel_file exist */
+	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
 		char cmd_line[128];
 		fprintf(stderr, "[WriteKernelFn]find %s in udisk!\n",Kernel_File);
@@ -353,62 +346,86 @@ int WriteKernelFn()
 }
 
 
+int WriteAppFn()
+{
+	int ret=0;
+	/*mount root partition to /mnt*/
+	ret=pox_system(MOUNT_APP_PATH);
+    if (!ret) {
+        printf("[WriteAppFn] Mount root path success!\n");
+    }
+    else {
+        printf("[WriteAppFn] Mount root path failed!\n");
+    }
+	/*access if App_File exist */
+	if(access(App_File, F_OK) == 0){
+		char cmd_line[128];
+		fprintf(stderr, "[WriteAppFn] find %s in udisk!\n",App_File);
+		sprintf(cmd_line, "%s%s%s", "tar -jxf ", App_File," -C /mnt");
+		pox_system(cmd_line);
+		pox_system("sync");
+	}else{
+		printf("[WriteAppFn] no Kernel file !\n");
+	}
+
+	if(0==umount("/mnt")){
+		printf("[WriteAppFn] umount /mnt success!\n");
+	}
+	return 0;
+}
+
+
 int	main(int argc, char **argv) {
 	const char *send_intent = NULL;
     const char *update_package = NULL;
     int  wipe_cache = 0;
     int status = INSTALL_SUCCESS;
 	
+	/*for recovery LOG*/
+    mkdir("/sdcard/cache", 755);
 	pox_system("mount -o remount rw /");
 	//mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
-	serial_fp = fopen("/dev/ttySiRF1", "w");//A7 serial port
+	serial_fp = fopen("/dev/ttySiRF1", "w");
     if (serial_fp != NULL) fprintf(serial_fp, "[recovery]Open ttySiRF1 success!\n");
 	/*redirect stdout`stderr*/
     freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
     freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
 
+	/*find target media*/   
+   	if (access(nand_device, F_OK) == 0){
+    /* boot media is nand, and it will be updated*/
+        target_media = nand_device;
+	}else{
+    /* boot media is emmc, and it will be updated*/
+		target_media = mmc_device;
+	}
     user_partno = 7;//maybe not
     sprintf(user_part_nand, "/dev/nandblk0p%d", user_partno);
     sprintf(user_part_sd, "/dev/mmcblk0p%d", user_partno);
-	
-    FILE* f = NULL;
-    usleep(10000);
+    usleep(1000);
 	
     if (access(udisk, F_OK) ==0) {
 		fprintf(serial_fp, "[recovery]udisk exists\n");
-	/*mount udisk*/
-	mount_device(udisk,mount_point,"vfat");
-	/*find update.zip*/
-	if(-1==find_update_zip()){
-		fprintf(serial_fp, "[recovery]can`t find update.zip\n");
-	};
-	/*find target media*/   
-    if (access(nand_device, F_OK) == 0) {
-        /* boot media is nand, and it will be updated*/
-        target_media = nand_device;
-	} else {
-        /* boot media is nand, and it will be updated*/
-		target_media = mmc_device;
-		}
-        fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
+		/*mount udisk*/
+		mount_device(udisk,mount_point,"vfat");
+		/*find update.zip*/
+		if(-1==find_update_zip()){
+			fprintf(serial_fp, "[recovery]can`t find update.zip\n");
+			umount(mount_point);
+		}	
+        fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);	
     }else{
 		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
 	}
-	/*install packages*/
-    mkdir("/sdcard/cache", 755);
 
-
-/**set recovery start flag 0x5a**/
+	/*set recovery start flag 0x5**/
     set_flag(target_media, RFLAG_ADDR, RFLAG_START);
 		fprintf(serial_fp, "\n[recovery]Set recovery start flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
 
-/**get update.zip path && install it**/
-    update_package = UPDATE_PACKAGE_PATH;
-	//status = install_package(UPDATE_PACKAGE_PATH, &wipe_cache, TEMPORARY_INSTALL_FILE);
-
-		WriteUbootFn(Uboot_Name,Uboot_Path);
-		WriteKernelFn();
-/* update update.zip */
+	//WriteUbootFn(Uboot_Name,Uboot_Path);
+	WriteKernelFn();
+	WriteAppFn();
+	/*update update.zip*/
 	if(status == INSTALL_SUCCESS) {
             sprintf(user_part, "%sp7", target_media);
 	    mkdir("/user", 0755);
@@ -421,14 +438,13 @@ int	main(int argc, char **argv) {
 	    }
 		remove("/user");
 	}
-/*restore BT files*/
+/*update BT files*/
 	if(status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]updating bt!\n");
 		update_bt();
 	}
 
 	finish_recovery(send_intent);
-   // sync();
 
 /**set recovery finish flag 0xa5**/
    set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
@@ -443,6 +459,7 @@ int	main(int argc, char **argv) {
 		}
 	if(0==umount("/sdcard")){
 		remove("/sdcard");
-		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");}
+		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");
+	}
     return EXIT_SUCCESS;
 }

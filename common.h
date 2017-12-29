@@ -17,22 +17,24 @@
 #include <time.h>
 #include <dirent.h>
 
-#define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
-#define LOGI(...) fprintf(stdout, "I:" __VA_ARGS__)
-
 #define false 0
 #define true  1
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
+
+enum { 
+	INSTALL_SUCCESS, 
+	INSTALL_ERROR, 
+	INSTALL_CORRUPT };
+	
+#define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
+#define LOGI(...) fprintf(stdout, "I:" __VA_ARGS__)
+	
 /*log path*/
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
-static const char *TEMPORARY_INSTALL_FILE = "/tmp/last_install";
 static const char *INTENT_FILE = "/sdcard/cache/intent";
 static const char *LOG_FILE = "/sdcard/cache/log";
 static const char *LAST_LOG_FILE = "/sdcard/cache/last_log";
-static const char *LAST_INSTALL_FILE = "/sdcard/cache/last_install";
-
-enum { INSTALL_SUCCESS, 
-	INSTALL_ERROR, 
-	INSTALL_CORRUPT };
 
 FILE* fopen_path(const char *path, const char *mode);
 char *sirfsoc_get_os_type();
