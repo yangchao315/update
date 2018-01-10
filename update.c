@@ -313,34 +313,35 @@ done:
 int WriteKernelFn()
 {
 	int ret=0;
-	/*mount boot partition to /mnt*/
-	ret=pox_system(MOUNT_KERNEL_PATH);
-    if (!ret) {
-        printf("[WriteKernelFn] Mount kernel path success!\n");
-    }
-    else {
-        printf("[WriteKernelFn] Mount kernel path failed!\n");
-    }
 	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
 		char cmd_line[128];
 		fprintf(stderr, "[WriteKernelFn]find %s in udisk!\n",Kernel_File);
+		/*mount boot partition to /mnt*/
+		ret=pox_system(MOUNT_KERNEL_PATH);
+		if (!ret) {
+        	printf("[WriteKernelFn] Mount kernel path success!\n");
+    	}else {
+        	printf("[WriteKernelFn] Mount kernel path failed!\n");
+    	}
 		sprintf(cmd_line, "%s%s%s", "tar -jxvf ", Kernel_File," -C /tmp");
 		pox_system(cmd_line);
 		
-	/*update kernel & dtb*/
+		/*update kernel & dtb & csrvisor.bin*/
 		copy_file("/tmp/zImage","/mnt/zImage-v1");
 		copy_file("/tmp/zImage","/mnt/zImage-v2");
 		pox_system("sync");
 		copy_file("/tmp/dtb","/mnt/dtb-v1");
 		copy_file("/tmp/dtb","/mnt/dtb-v2");	
 		pox_system("sync");
+		copy_file("/tmp/csrvisor.bin","/mnt/csrvisor.bin");
+
+		if(0==umount("/mnt")){
+			printf("[WriteKernelFn]umount /mnt success!\n");
+		}
 	}else{
 		printf("[WriteKernelFn] no Kernel file !\n");
-	}
-
-	if(0==umount("/mnt")){
-		printf("[WriteKernelFn]umount /mnt success!\n");
+		return -1;
 	}
 	return 0;
 }
@@ -349,6 +350,18 @@ int WriteKernelFn()
 int WriteAppFn()
 {
 	int ret=0;
+	int update_mode = 1;
+	if(update_mode == 1){
+		pox_system("umount /dev/nandblk0p3");
+		 ret = pox_system(FORMAT_DISK_CMD);
+		if (!ret) {
+            printf("[WriteAppFn] Format disk success!\n");
+        }
+        else {
+            printf("[WriteAppFn] Format disk failed!\n");
+            return 1;
+        }
+	}
 	/*mount root partition to /mnt*/
 	ret=pox_system(MOUNT_APP_PATH);
     if (!ret) {
@@ -365,7 +378,7 @@ int WriteAppFn()
 		pox_system(cmd_line);
 		pox_system("sync");
 	}else{
-		printf("[WriteAppFn] no Kernel file !\n");
+		printf("[WriteAppFn] no App file !\n");
 	}
 
 	if(0==umount("/mnt")){
@@ -424,7 +437,7 @@ int	main(int argc, char **argv) {
 
 	//WriteUbootFn(Uboot_Name,Uboot_Path);
 	WriteKernelFn();
-	WriteAppFn();
+	//WriteAppFn();
 	/*update update.zip*/
 	if(status == INSTALL_SUCCESS) {
             sprintf(user_part, "%sp7", target_media);
@@ -438,17 +451,19 @@ int	main(int argc, char **argv) {
 	    }
 		remove("/user");
 	}
-/*update BT files*/
+	/*update BT files*/
 	if(status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]updating bt!\n");
 		update_bt();
 	}
 
 	finish_recovery(send_intent);
-
-/**set recovery finish flag 0xa5**/
+	
+	if(status == INSTALL_SUCCESS){
+	/*set recovery finish flag 0xa5*/
    set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
    		fprintf(serial_fp, "\n[recovery]Set recovery finish flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
+	}
 
 
 	if (status == INSTALL_SUCCESS){
