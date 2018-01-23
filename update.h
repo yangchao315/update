@@ -30,6 +30,9 @@ static const char *BT_SYNERGY_PATH="/btmp2/var/lib/csr_synergy/bt.inf";
 char *Uboot_Name = "/sdcard/update/u-boot.csr";
 char *Uboot_Path = "/dev/nandblk0";
 
+char *M3_File = "/media/disk/update/myrtos.bin";
+char *M3_Path= "/dev/mtd0";
+
 FILE *serial_fp = NULL;
 int user_partno = 0;
 bool is_factory_production = false;
