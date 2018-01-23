@@ -5,9 +5,15 @@
 #include <sys/wait.h>
 
 #define MAXLINE 1024
-
+#define DEBUG_ENABLE
+#ifdef DEBUG_ENABLE
+#define DPRINT(fmt, args...) fprintf(stderr, "[%s %d] "fmt"\n", __FILE__, __LINE__, ##args);
+#else
+#define DPRINT(fmt, ...)
+#endif
 int main()
 {
+    DPRINT("my log begin\n");
 	char result_buf[MAXLINE], command[MAXLINE];
 	int rc = 0; // 用于接收命令返回值
 	FILE *fp;
