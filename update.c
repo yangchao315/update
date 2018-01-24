@@ -3,23 +3,21 @@
 #define RFLAG_ADDR		0x0027f000 /* 2.5MB-4096 */
 #define RFLAG_START		0x5a
 #define RFLAG_FINISH	0xa5
-static void set_flag(const char* target_media,
-		int offset, int flag)
+static void set_flag(const char* target_media,int offset, int flag)
 {
 	FILE* f = NULL;
 	if (target_media == NULL)
 		return;
 	f = fopen(target_media, "wb");
 	if (f == NULL) {
-		fprintf(stderr, "[SetFlag]can't open %s: %s\n",
-				target_media, strerror(errno));
+		fprintf(stderr, "[set_flag] Can't open %s: %s\n",target_media, strerror(errno));
 		return;
 	}
 	if (!(fseek(f, offset, SEEK_SET))) {
-		fprintf(stderr, "[SetFlag]write FLAG %#x at %#x\n", flag, offset);
+		fprintf(stderr, "[set_flag] Write FLAG %#x at %#x\n", flag, offset);
 		putc(flag, f);
 	} else {
-		fprintf(stderr, "[SetFlag]fseek to position: %#x failed\n", offset);
+		fprintf(stderr, "[set_flag] Fseek to position: %#x failed\n", offset);
 	}
 	fflush(f);
 	fsync(fileno(f));
@@ -35,15 +33,14 @@ static int get_flag(const char* target_media, int offset)
 		return 0;
 	f = fopen(target_media, "rb");
 	if (f == NULL) {
-		fprintf(stderr, "[SetFlag]can't open %s: %s\n",
-				target_media, strerror(errno));
+		fprintf(stderr, "[get_flag] Can't open %s: %s\n",target_media, strerror(errno));
 		return 0;
 	}
 	if (!(fseek(f, offset, SEEK_SET))) {
 		flag = getc(f);
-		fprintf(stderr, "[GetFlag]read FLAG %#x at %#x\n", flag, offset);
+		fprintf(stderr, "[get_flag] Read FLAG %#x at %#x\n", flag, offset);
 	} else {
-		fprintf(stderr, "[GetFlag]fseek to position: %#x failed\n", offset);
+		fprintf(stderr, "[get_flag] Fseek to position: %#x failed\n", offset);
 	}
 	fclose(f);
 	f = NULL;
@@ -57,10 +54,10 @@ static int erase_flash(int fd, int offset, int bytes)
 	erase.length = bytes;
 	err = ioctl(fd,MEMERASE, &erase);
 	if (err < 0) {
-		fprintf(stderr,"[erase_flash] MEMERASE failed\n");
+		fprintf(serial_fp,"[erase_flash] MEMERASE failed\n");
 		return 1;
 	}
-	fprintf(stderr, "[erase_flash] Erased %d bytes from address 0x%.8x in flash\n", bytes, offset);
+	fprintf(serial_fp, "[erase_flash] Erased %d bytes from address 0x%.8x in flash\n", bytes, offset);
 	return 0;
 }
 
@@ -73,22 +70,22 @@ static int file_to_flash(int fd, int offset, int len, const char *filename)
 	int n = len;
 
 	if (offset != lseek(fd, offset, SEEK_SET)) {
-		perror("lseek()");
+		fprintf(serial_fp,"[file_to_flash] lseek() failed!\n");
 		return 1;
 	}
 	if ((fp = fopen(filename, "r")) == NULL) {
-		perror("fopen()");
+		fprintf(serial_fp,"[file_to_flash] fopen() failed!\n");
 		return 1;
 	}
 retry:
 	if ((buf = (u_int8_t *) malloc(size)) == NULL) {
-		fprintf(stderr, "%s: malloc(%#x) failed\n", __func__, size);
+		fprintf(serial_fp, "%s: malloc(%#x) failed\n", __func__, size);
 		if (size != BUFSIZ) {
 			size = BUFSIZ;
-			fprintf(stderr, "%s: trying buffer size %#x\n", __func__, size);
+			fprintf(serial_fp, "%s: trying buffer size %#x\n", __func__, size);
 			goto retry;
 		}
-		perror("malloc()");
+		printf("malloc()");
 		fclose(fp);
 		return 1;
 	}
@@ -96,16 +93,16 @@ retry:
 		if (n <= size)
 			size = n;
 		if (fread(buf, size, 1, fp) != 1 || ferror(fp)) {
-			fprintf(stderr, "%s: fread, size %#x, n %#x\n", __func__, size, n);
-			perror("fread()");
+			fprintf(serial_fp, "%s: fread, size %#x, n %#x\n", __func__, size, n);
+			printf("fread()");
 			free(buf);
 			fclose(fp);
 			return 1;
 		}
 		err = write(fd, buf, size);
 		if (err < 0) {
-			fprintf(stderr, "%s: write, size %#x, n %#x\n", __func__, size, n);
-			perror("write()");
+			fprintf(serial_fp, "%s: write, size %#x, n %#x\n", __func__, size, n);
+			printf("write()");
 			free(buf);
 			fclose(fp);
 			return 1;
@@ -116,7 +113,7 @@ retry:
 	if (buf != NULL)
 		free(buf);
 	fclose(fp);
-	printf("Copied %d bytes from %s to address 0x%.8x in flash\n", len, filename, offset);
+	fprintf(serial_fp,"Copied %d bytes from %s to address 0x%.8x in flash\n", len, filename, offset);
 	return 0;
 }
 
@@ -388,22 +385,22 @@ char* WriteM3Fn(char* filename,char* partition) {
 	bool success = true;
 
     if (strlen(partition) == 0) {
-        fprintf(stderr, "[WriteM3Fn] partition argument to %s can't be empty", partition);
+        fprintf(serial_fp, "[WriteM3Fn] partition argument to %s can't be empty", partition);
         goto done;
     }
     if (strlen(filename) == 0) {
-        fprintf(stderr, "[WriteM3Fn] file argument to %s can't be empty", filename);
+        fprintf(serial_fp, "[WriteM3Fn] file argument to %s can't be empty", filename);
         goto done;
     }
 
 	if ((rfd = open(filename, O_SYNC | O_RDONLY)) < 0) {
-		fprintf(stderr, "open %s failed\n",filename);
+		fprintf(serial_fp, "[WriteM3Fn] open %s failed\n",filename);
         	result = strdup("");
 		goto done;
 	}
 
 	if ((wfd = open(partition, O_SYNC | O_RDWR)) < 0) {
-		fprintf(stderr, "open %s failed\n",partition);
+		fprintf(serial_fp, "[WriteM3Fn] open %s failed\n",partition);
         	result = strdup("");
 		goto done;
 	}
@@ -411,26 +408,26 @@ char* WriteM3Fn(char* filename,char* partition) {
 	stat(filename, &st);
 	rf_size = st.st_size;
 
-	fprintf(stderr, "erase flash...\n");
+	fprintf(stderr, "[WriteM3Fn] erase flash...\n");
 	err = erase_flash(wfd, 0, rf_size);
 	if (err) {
-		fprintf(stderr, "erase SPI NOR failed\n");
+		fprintf(serial_fp, "[WriteM3Fn] erase SPI NOR failed\n");
 		success = false;
 		goto done;
 	}
-	fprintf(stderr, "%s (%d bytes) be worte\n", filename, rf_size);
+	fprintf(serial_fp, "[WriteM3Fn]%s (%d bytes) be worte\n", filename, rf_size);
 	err = file_to_flash(wfd, 0, rf_size, filename);
 	if (err) {
-		fprintf(stderr, "wirte Freertos to SPI NOR failed\n");
+		fprintf(serial_fp, "[WriteM3Fn] wirte Freertos to SPI NOR failed\n");
 		success = false;
 		goto done;
 	}
 
 	/* close device */
 	if (close(rfd) < 0)
-		fprintf(stderr, "close rfd failed\n");
+		fprintf(serial_fp, "[WriteM3Fn] close rfd failed\n");
 	if (close(wfd) < 0)
-		fprintf(stderr, "close wfd failed\n");
+		fprintf(serial_fp, "[WriteM3Fn] close wfd failed\n");
 
 	result = success ? partition : strdup("");
 
@@ -439,7 +436,7 @@ done:
 		free(partition);
 		free(filename);
 		}
-	fprintf(stderr, "[WriteM3Fn]write M3 successed! \n");
+	fprintf(serial_fp, "[WriteM3Fn] write M3 successed! \n");
     return result;
 }
 
@@ -449,15 +446,15 @@ int WriteKernelFn()
 	/*mount boot partition to /mnt*/
 	ret=pox_system(MOUNT_KERNEL_PATH);
     if (!ret) {
-        printf("[WriteKernelFn] Mount kernel path success!\n");
+        fprintf(serial_fp,"[WriteKernelFn] Mount kernel path success!\n");
     }
     else {
-        printf("[WriteKernelFn] Mount kernel path failed!\n");
+        fprintf(serial_fp,"[WriteKernelFn] Mount kernel path failed!\n");
     }
 	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
 		char cmd_line[128];
-		fprintf(stderr, "[WriteKernelFn]find %s in udisk!\n",Kernel_File);
+		fprintf(serial_fp, "[WriteKernelFn] find %s in udisk!\n",Kernel_File);
 		sprintf(cmd_line, "%s%s%s", "tar -jxvf ", Kernel_File," -C /tmp");
 		pox_system(cmd_line);
 		
@@ -469,11 +466,11 @@ int WriteKernelFn()
 		copy_file("/tmp/dtb","/mnt/dtb-v2");	
 		pox_system("sync");
 	}else{
-		printf("[WriteKernelFn] no Kernel file !\n");
+		fprintf(serial_fp,"[WriteKernelFn] no Kernel file !\n");
 	}
 
 	if(0==umount("/mnt")){
-		printf("[WriteKernelFn]umount /mnt success!\n");
+		fprintf(serial_fp,"[WriteKernelFn] umount /mnt success!\n");
 	}
 	return 0;
 }
@@ -485,28 +482,42 @@ int WriteAppFn()
 	/*mount root partition to /mnt*/
 	ret=pox_system(MOUNT_APP_PATH);
     if (!ret) {
-        printf("[WriteAppFn] Mount root path success!\n");
+        fprintf(serial_fp,"[WriteAppFn] Mount root path success!\n");
     }
     else {
-        printf("[WriteAppFn] Mount root path failed!\n");
+        fprintf(serial_fp,"[WriteAppFn] Mount root path failed!\n");
     }
 	/*access if App_File exist */
 	if(access(App_File, F_OK) == 0){
 		char cmd_line[128];
-		fprintf(stderr, "[WriteAppFn] find %s in udisk!\n",App_File);
+		fprintf(serial_fp, "[WriteAppFn] find %s in udisk!\n",App_File);
 		sprintf(cmd_line, "%s%s%s", "tar -jxf ", App_File," -C /mnt");
 		pox_system(cmd_line);
 		pox_system("sync");
 	}else{
-		printf("[WriteAppFn] no Kernel file !\n");
+		fprintf(serial_fp,"[WriteAppFn] no App file !\n");
 	}
 
 	if(0==umount("/mnt")){
-		printf("[WriteAppFn] umount /mnt success!\n");
+		fprintf(serial_fp,"[WriteAppFn] umount /mnt success!\n");
 	}
 	return 0;
 }
-
+int caculate_partition(void)
+{
+	char DEVICE_NAME[32];
+	int num=0,i=0;
+	for(i=0;i<10;i++)
+	{
+		sprintf(DEVICE_NAME,"%s%s%d",target_media,"p",i);
+		if(!access(DEVICE_NAME,F_OK))
+		{	
+			num=i;	
+		}
+	}	
+	fprintf(stderr, "[caculate_partition] get the last partition num is %d!\n",num);
+	return num;
+}
 
 int	main(int argc, char **argv) {
 	const char *send_intent = NULL;
@@ -514,9 +525,8 @@ int	main(int argc, char **argv) {
     int  wipe_cache = 0;
     int status = INSTALL_SUCCESS;
 	
-	/*for recovery LOG*/
-    mkdir("/sdcard/cache", 755);
 	pox_system("mount -o remount rw /");
+    mkdir("/sdcard/cache", 755);
 	//mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
 	serial_fp = fopen("/dev/ttySiRF1", "w");
     if (serial_fp != NULL) fprintf(serial_fp, "[recovery]Open ttySiRF1 success!\n");
@@ -524,17 +534,14 @@ int	main(int argc, char **argv) {
     freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
     freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
 
-	/*find target media*/   
+	/*check target media*/   
    	if (access(nand_device, F_OK) == 0){
-    /* boot media is nand, and it will be updated*/
         target_media = nand_device;
 	}else{
-    /* boot media is emmc, and it will be updated*/
 		target_media = mmc_device;
 	}
-    user_partno = 7;//maybe not
-    sprintf(user_part_nand, "/dev/nandblk0p%d", user_partno);
-    sprintf(user_part_sd, "/dev/mmcblk0p%d", user_partno);
+	fprintf(serial_fp, "[recovery]Target_media is %s!\n",target_media);
+    
     usleep(1000);
 	
     if (access(udisk, F_OK) ==0) {
@@ -545,10 +552,12 @@ int	main(int argc, char **argv) {
 		if(-1==find_update_zip()){
 			fprintf(serial_fp, "[recovery]can`t find update.zip\n");
 			umount(mount_point);
+			return EXIT_FAILURE;
 		}	
         fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);	
     }else{
 		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
+		return EXIT_FAILURE;
 	}
 
 	/*set recovery start flag 0x5**/
@@ -558,10 +567,14 @@ int	main(int argc, char **argv) {
 	//WriteUbootFn(Uboot_Name,Uboot_Path);
 	WriteM3Fn(M3_File,M3_Path);
 	WriteKernelFn();
-	WriteAppFn();
+	if (access(App_File, F_OK) ==0) {
+		//pox_system("mkfs.ext4 /dev/mmcblk0p3");
+		//WriteAppFn();
+		}
 	/*update update.zip*/
 	if(status == INSTALL_SUCCESS) {
-            sprintf(user_part, "%sp7", target_media);
+		user_partno = caculate_partition();
+		sprintf(user_part, "%sp%d", target_media,user_partno);
 	    mkdir("/user", 0755);
             if (mount(user_part, "/user", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
 		fprintf(serial_fp, "[recovery]mount %s to /user failed!\n",user_part);
@@ -572,7 +585,7 @@ int	main(int argc, char **argv) {
 	    }
 		remove("/user");
 	}
-/*update BT files*/
+	/*update BT files*/
 	if(status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]updating bt!\n");
 		update_bt();
@@ -580,7 +593,7 @@ int	main(int argc, char **argv) {
 
 	finish_recovery(send_intent);
 
-/**set recovery finish flag 0xa5**/
+	/*set recovery finish flag 0xa5*/
    set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
    		fprintf(serial_fp, "\n[recovery]Set recovery finish flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
 

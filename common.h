@@ -8,7 +8,6 @@
 #include <limits.h>
 #include <unistd.h>
 #include <signal.h>
-#include <linux/input.h>
 #include <mtd/mtd-user.h>
 
 #include <string.h>

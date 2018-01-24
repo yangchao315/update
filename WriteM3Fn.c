@@ -22,7 +22,7 @@
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 
-char *M3_File = "/media/disk/update/myrtos.bin";
+char *M3_File = "/mnt/update/myrtos.bin";
 char *M3_Path= "/dev/mtd0";
 
 static int erase_flash(int fd, int offset, int bytes)
@@ -33,10 +33,10 @@ static int erase_flash(int fd, int offset, int bytes)
 	erase.length = bytes;
 	err = ioctl(fd,MEMERASE, &erase);
 	if (err < 0) {
-		perror("MEMERASE");
+		fprintf(stderr,"[erase_flash] MEMERASE failed\n");
 		return 1;
 	}
-	fprintf(stderr, "Erased %d bytes from address 0x%.8x in flash\n", bytes, offset);
+	fprintf(stderr, "[erase_flash] Erased %d bytes from address 0x%.8x in flash\n", bytes, offset);
 	return 0;
 }
 
