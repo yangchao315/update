@@ -443,14 +443,28 @@ done:
 int WriteKernelFn()
 {
 	int ret=0;
-	/*mount boot partition to /mnt*/
-	ret=pox_system(MOUNT_KERNEL_PATH);
-    if (!ret) {
-        fprintf(serial_fp,"[WriteKernelFn] Mount kernel path success!\n");
-    }
-    else {
-        fprintf(serial_fp,"[WriteKernelFn] Mount kernel path failed!\n");
-    }
+	int flag=0;
+	flag=get_flag(target_media, RFLAG_ADDR);
+	if(flag==RFLAG_START){
+		/*5a-->system-A boot,update system-B*/
+		/*mount boot2 partition to /mnt*/
+		ret=pox_system(MOUNT_KERNEL_PATH2);
+		if (!ret) {
+				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path success!\n");
+				}else {
+				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path failed!\n");
+			}
+	}else{
+		/*a5-->system-B boot,update system-A*/
+		/*mount boot1 partition to /mnt*/
+		ret=pox_system(MOUNT_KERNEL_PATH);
+		if (!ret) {
+				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path success!\n");
+				}else {
+				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path failed!\n");
+		}
+	}
+
 	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
 		char cmd_line[128];
@@ -479,14 +493,27 @@ int WriteKernelFn()
 int WriteAppFn()
 {
 	int ret=0;
-	/*mount root partition to /mnt*/
-	ret=pox_system(MOUNT_APP_PATH);
-    if (!ret) {
-        fprintf(serial_fp,"[WriteAppFn] Mount root path success!\n");
-    }
-    else {
-        fprintf(serial_fp,"[WriteAppFn] Mount root path failed!\n");
-    }
+	int flag=0;
+	flag=get_flag(target_media, RFLAG_ADDR);
+	if(flag==RFLAG_START){
+		/*5a-->system-A boot,update system-B*/
+		/*mount root2 partition to /mnt*/
+		ret=pox_system(MOUNT_APP_PATH2);
+			if (!ret) {
+				fprintf(serial_fp,"[WriteAppFn] Mount root2 path success!\n");
+			}else {
+				fprintf(serial_fp,"[WriteAppFn] Mount root2 path failed!\n");
+			}
+	}else{
+		/*a5-->system-B boot,update system-A*/
+		/*mount root partition to /mnt*/
+		ret=pox_system(MOUNT_APP_PATH);
+			if (!ret) {
+				fprintf(serial_fp,"[WriteAppFn] Mount root path success!\n");
+			}else {
+				fprintf(serial_fp,"[WriteAppFn] Mount root path failed!\n");
+			}
+	}
 	/*access if App_File exist */
 	if(access(App_File, F_OK) == 0){
 		char cmd_line[128];
@@ -515,7 +542,7 @@ int caculate_partition(void)
 			num=i;	
 		}
 	}	
-	fprintf(stderr, "[caculate_partition] get the last partition num is %d!\n",num);
+	fprintf(serial_fp, "[caculate_partition] get the last partition num is %d!\n",num);
 	return num;
 }
 
@@ -524,12 +551,13 @@ int	main(int argc, char **argv) {
     const char *update_package = NULL;
     int  wipe_cache = 0;
     int status = INSTALL_SUCCESS;
+	int flag=0;
 	
 	pox_system("mount -o remount rw /");
     mkdir("/sdcard/cache", 755);
 	//mkdir(mount_point, 755);//create /sdcard as the mount point,maybe we will use /mnt 
 	serial_fp = fopen("/dev/ttySiRF1", "w");
-    if (serial_fp != NULL) fprintf(serial_fp, "[recovery]Open ttySiRF1 success!\n");
+    if (serial_fp != NULL) fprintf(serial_fp, "\n[recovery]Open ttySiRF1 success!\n");
 	/*redirect stdout`stderr*/
     freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
     freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
@@ -560,12 +588,8 @@ int	main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	/*set recovery start flag 0x5**/
-    set_flag(target_media, RFLAG_ADDR, RFLAG_START);
-		fprintf(serial_fp, "\n[recovery]Set recovery start flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
-
 	//WriteUbootFn(Uboot_Name,Uboot_Path);
-	WriteM3Fn(M3_File,M3_Path);
+	//WriteM3Fn(M3_File,M3_Path);
 	WriteKernelFn();
 	if (access(App_File, F_OK) ==0) {
 		//pox_system("mkfs.ext4 /dev/mmcblk0p3");
@@ -593,10 +617,20 @@ int	main(int argc, char **argv) {
 
 	finish_recovery(send_intent);
 
-	/*set recovery finish flag 0xa5*/
-   set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
-   		fprintf(serial_fp, "\n[recovery]Set recovery finish flag, read=%#x\n",get_flag(target_media, RFLAG_ADDR));
-
+	if (status == INSTALL_SUCCESS){
+		flag=get_flag(target_media, RFLAG_ADDR);
+		if(flag==RFLAG_START){
+		/*5a-->system-A boot,so we are updating system-B
+		update flag=0xa5,next time we boot System-B*/
+			set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
+			fprintf(serial_fp, "\n[recovery]System-B update done!Set flag=%#x\n",get_flag(target_media, RFLAG_ADDR));
+		}else{
+		/*a5-->system-B boot,so we are updating system-A
+		update flag=0x5a,next time we boot System-A*/
+			set_flag(target_media,RFLAG_ADDR,RFLAG_START);
+			fprintf(serial_fp, "\n[recovery]System-A update done!Set flag=%#x\n",get_flag(target_media, RFLAG_ADDR));
+		}
+	}
 
 	if (status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]recovery finished\n");
