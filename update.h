@@ -9,8 +9,12 @@ static const char *mount_point="/sdcard";
 char *App_File = "/sdcard/update/APP_Update.tar.bz2";
 char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
 
-#define MOUNT_APP_PATH   "mount /dev/mmcblk0p3 /mnt/"
 #define MOUNT_KERNEL_PATH   "mount /dev/mmcblk0p2 /mnt/"
+#define MOUNT_APP_PATH   "mount /dev/mmcblk0p3 /mnt/"
+
+#define MOUNT_KERNEL_PATH2   "mount /dev/mmcblk0p6 /mnt/"
+#define MOUNT_APP_PATH2   "mount /dev/mmcblk0p7 /mnt/"
+
 
 /*zip package path*/
 static const char *UPDATE_PACKAGE_PATH = "/sdcard/update/update.zip";
