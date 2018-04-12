@@ -453,6 +453,7 @@ int WriteKernelFn()
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path success!\n");
 				}else {
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path failed!\n");
+				goto mount_err;
 			}
 	}else{
 		/*a5-->system-B boot,update system-A*/
@@ -462,27 +463,31 @@ int WriteKernelFn()
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path success!\n");
 				}else {
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path failed!\n");
+				goto mount_err;
 		}
 	}
-
 	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
 		char cmd_line[128];
 		fprintf(serial_fp, "[WriteKernelFn] find %s in udisk!\n",Kernel_File);
-		sprintf(cmd_line, "%s%s%s", "tar -jxvf ", Kernel_File," -C /tmp");
+		mkdir("/kernel_tmp", 755);
+		sprintf(cmd_line, "%s%s%s", "tar -jxvf ", Kernel_File," -C /kernel_tmp");
 		pox_system(cmd_line);
 		
 	/*update kernel & dtb*/
-		copy_file("/tmp/zImage","/mnt/zImage-v1");
-		copy_file("/tmp/zImage","/mnt/zImage-v2");
+		copy_file("/kernel_tmp/zImage","/mnt/zImage-v1");
+		copy_file("/kernel_tmp/zImage","/mnt/zImage-v2");
 		pox_system("sync");
-		copy_file("/tmp/dtb","/mnt/dtb-v1");
-		copy_file("/tmp/dtb","/mnt/dtb-v2");	
+		copy_file("/kernel_tmp/dtb","/mnt/dtb-v1");
+		copy_file("/kernel_tmp/dtb","/mnt/dtb-v2");
 		pox_system("sync");
+		copy_file("/kernel_tmp/csrvisor.bin","/mnt/csrvisor.bin");
+		fprintf(serial_fp,"[WriteKernelFn] update Kernel success !\n");
+		pox_system("rm -rf /kernel_tmp");
 	}else{
 		fprintf(serial_fp,"[WriteKernelFn] no Kernel file !\n");
 	}
-
+mount_err:
 	if(0==umount("/mnt")){
 		fprintf(serial_fp,"[WriteKernelFn] umount /mnt success!\n");
 	}
@@ -503,6 +508,7 @@ int WriteAppFn()
 				fprintf(serial_fp,"[WriteAppFn] Mount root2 path success!\n");
 			}else {
 				fprintf(serial_fp,"[WriteAppFn] Mount root2 path failed!\n");
+				goto mount_err;
 			}
 	}else{
 		/*a5-->system-B boot,update system-A*/
@@ -512,6 +518,7 @@ int WriteAppFn()
 				fprintf(serial_fp,"[WriteAppFn] Mount root path success!\n");
 			}else {
 				fprintf(serial_fp,"[WriteAppFn] Mount root path failed!\n");
+				goto mount_err;
 			}
 	}
 	/*access if App_File exist */
@@ -521,15 +528,71 @@ int WriteAppFn()
 		sprintf(cmd_line, "%s%s%s", "tar -jxf ", App_File," -C /mnt");
 		pox_system(cmd_line);
 		pox_system("sync");
+		fprintf(serial_fp,"[WriteAppFn] update App success !\n");
 	}else{
 		fprintf(serial_fp,"[WriteAppFn] no App file !\n");
 	}
 
+mount_err:
 	if(0==umount("/mnt")){
 		fprintf(serial_fp,"[WriteAppFn] umount /mnt success!\n");
 	}
 	return 0;
 }
+
+
+int WriteRootfsFn()
+{
+	int ret=0,ret2=0;
+	int flag=0;
+	flag=get_flag(target_media, RFLAG_ADDR);
+	if(flag==RFLAG_START){
+		/*0x5a-->system-A boot,update system-B*/
+		/*mount root2 partition to /mnt*/
+		ret=pox_system(MOUNT_APP_PATH2);
+			if (!ret) {
+				fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path success!\n");
+				ret2=pox_system(FORMAT_ROOT2);
+				if(!ret2)fprintf(serial_fp,"[WriteRootfsFn] Format root2 success!\n");
+			}else {
+				fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path failed!\n");
+				goto mount_err;
+			}
+	}else{
+		/*0xa5-->system-B boot,update system-A*/
+		/*mount root partition to /mnt*/
+		ret=pox_system(MOUNT_APP_PATH);
+			if (!ret) {
+				fprintf(serial_fp,"[WriteRootfsFn] Mount root path success!\n");
+				ret2=pox_system(FORMAT_ROOT);
+				if(!ret2)fprintf(serial_fp,"[WriteRootfsFn] Format root success!\n");
+			}else {
+				fprintf(serial_fp,"[WriteRootfsFn] Mount root path failed!\n");
+				goto mount_err;
+			}
+	}
+	/*access if Rootfs_File exist */
+	if(access(Rootfs_File, F_OK) == 0){
+		char cmd_line[128];
+		fprintf(serial_fp, "[WriteRootfsFn] find %s in udisk!\n",Rootfs_File);
+		mkdir("/rootfs_tmp", 755);
+		sprintf(cmd_line, "%s%s%s", "tar -xf ", Rootfs_File," -C /rootfs_tmp");
+		pox_system(cmd_line);
+		pox_system("cp /rootfs_tmp/rootfs/* -rf /mnt");
+		pox_system("sync");
+		pox_system("rm -rf /rootfs_tmp");
+		fprintf(serial_fp,"[WriteRootfsFn] update rootfs success!\n");
+	}else{
+		fprintf(serial_fp,"[WriteRootfsFn] no Rootfs file !\n");
+	}
+
+mount_err:
+	if(0==umount("/mnt")){
+		fprintf(serial_fp,"[WriteRootfsFn] umount /mnt success!\n");
+	}
+	return 0;
+}
+
 int caculate_partition(void)
 {
 	char DEVICE_NAME[32];
@@ -591,11 +654,12 @@ int	main(int argc, char **argv) {
 	//WriteUbootFn(Uboot_Name,Uboot_Path);
 	//WriteM3Fn(M3_File,M3_Path);
 	WriteKernelFn();
-	if (access(App_File, F_OK) ==0) {
-		//pox_system("mkfs.ext4 /dev/mmcblk0p3");
-		//WriteAppFn();
+	WriteAppFn();
+	if (access(Rootfs_File, F_OK) ==0) {
+		WriteRootfsFn();
 		}
 	/*update update.zip*/
+	/*
 	if(status == INSTALL_SUCCESS) {
 		user_partno = caculate_partition();
 		sprintf(user_part, "%sp%d", target_media,user_partno);
@@ -608,7 +672,7 @@ int	main(int argc, char **argv) {
 	        fprintf(serial_fp, "[recovery]copy update.zip done!\n");
 	    }
 		remove("/user");
-	}
+	}*/
 	/*update BT files*/
 	if(status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]updating bt!\n");
@@ -620,12 +684,12 @@ int	main(int argc, char **argv) {
 	if (status == INSTALL_SUCCESS){
 		flag=get_flag(target_media, RFLAG_ADDR);
 		if(flag==RFLAG_START){
-		/*5a-->system-A boot,so we are updating system-B
+		/*0x5a-->system-A boot,so we are updating system-B
 		update flag=0xa5,next time we boot System-B*/
 			set_flag(target_media,RFLAG_ADDR,RFLAG_FINISH);
 			fprintf(serial_fp, "\n[recovery]System-B update done!Set flag=%#x\n",get_flag(target_media, RFLAG_ADDR));
 		}else{
-		/*a5-->system-B boot,so we are updating system-A
+		/*0xa5-->system-B boot,so we are updating system-A
 		update flag=0x5a,next time we boot System-A*/
 			set_flag(target_media,RFLAG_ADDR,RFLAG_START);
 			fprintf(serial_fp, "\n[recovery]System-A update done!Set flag=%#x\n",get_flag(target_media, RFLAG_ADDR));
@@ -642,5 +706,6 @@ int	main(int argc, char **argv) {
 		remove("/sdcard");
 		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");
 	}
+	pox_system("reboot");
     return EXIT_SUCCESS;
 }
