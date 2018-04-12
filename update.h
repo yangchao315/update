@@ -6,14 +6,19 @@ char *nand_device="/dev/nandblk0";
 char *mmc_device="/dev/mmcblk0";
 /*mount point*/
 static const char *mount_point="/sdcard";
-char *App_File = "/sdcard/update/APP_Update.tar.bz2";
+
 char *Kernel_File = "/sdcard/update/Kernel_Update.tar.bz2";
+char *App_File = "/sdcard/update/APP_Update.tar.bz2";
+char *Rootfs_File = "/sdcard/update/rootfs.tar.gz";
 
 #define MOUNT_KERNEL_PATH   "mount /dev/mmcblk0p2 /mnt/"
 #define MOUNT_APP_PATH   "mount /dev/mmcblk0p3 /mnt/"
+#define FORMAT_ROOT   "mkfs.ext4 /dev/mmcblk0p3"
+
 
 #define MOUNT_KERNEL_PATH2   "mount /dev/mmcblk0p6 /mnt/"
 #define MOUNT_APP_PATH2   "mount /dev/mmcblk0p7 /mnt/"
+#define FORMAT_ROOT2   "mkfs.ext4 /dev/mmcblk0p7"
 
 
 /*zip package path*/
