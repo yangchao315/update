@@ -543,33 +543,45 @@ mount_err:
 
 int WriteRootfsFn()
 {
-	int ret=0,ret2=0;
+	int ret=0;
 	int flag=0;
 	flag=get_flag(target_media, RFLAG_ADDR);
 	if(flag==RFLAG_START){
 		/*0x5a-->system-A boot,update system-B*/
 		/*mount root2 partition to /mnt*/
+		ret=pox_system(FORMAT_ROOT2);
+		fprintf(serial_fp,"[WriteRootfsFn] Format ret is %d \n",ret);
+		if(!ret){
+			fprintf(serial_fp,"[WriteRootfsFn] Format root2 success!\n");
+		}else{
+			fprintf(serial_fp,"[WriteRootfsFn] Format root2 failed!\n");
+		}
+
 		ret=pox_system(MOUNT_APP_PATH2);
-			if (!ret) {
-				fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path success!\n");
-				ret2=pox_system(FORMAT_ROOT2);
-				if(!ret2)fprintf(serial_fp,"[WriteRootfsFn] Format root2 success!\n");
-			}else {
-				fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path failed!\n");
-				goto mount_err;
-			}
+		if (!ret) {
+			fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path success!\n");
+		}else {
+			fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path failed!\n");
+			goto mount_err;
+		}
+
 	}else{
 		/*0xa5-->system-B boot,update system-A*/
 		/*mount root partition to /mnt*/
+		ret=pox_system(FORMAT_ROOT);
+		if(!ret){
+			fprintf(serial_fp,"[WriteRootfsFn] Format root success!\n");
+		}else{
+			fprintf(serial_fp,"[WriteRootfsFn] Format root failed!\n");
+		}
+
 		ret=pox_system(MOUNT_APP_PATH);
-			if (!ret) {
-				fprintf(serial_fp,"[WriteRootfsFn] Mount root path success!\n");
-				ret2=pox_system(FORMAT_ROOT);
-				if(!ret2)fprintf(serial_fp,"[WriteRootfsFn] Format root success!\n");
-			}else {
-				fprintf(serial_fp,"[WriteRootfsFn] Mount root path failed!\n");
-				goto mount_err;
-			}
+		if (!ret) {
+			fprintf(serial_fp,"[WriteRootfsFn] Mount root path success!\n");				
+		}else {
+			fprintf(serial_fp,"[WriteRootfsFn] Mount root path failed!\n");
+			goto mount_err;
+		}
 	}
 	/*access if Rootfs_File exist */
 	if(access(Rootfs_File, F_OK) == 0){
@@ -706,6 +718,6 @@ int	main(int argc, char **argv) {
 		remove("/sdcard");
 		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");
 	}
-	pox_system("reboot");
+	//pox_system("reboot");
     return EXIT_SUCCESS;
 }

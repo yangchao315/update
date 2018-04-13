@@ -13,12 +13,12 @@ char *Rootfs_File = "/sdcard/update/rootfs.tar.gz";
 
 #define MOUNT_KERNEL_PATH   "mount /dev/mmcblk0p2 /mnt/"
 #define MOUNT_APP_PATH   "mount /dev/mmcblk0p3 /mnt/"
-#define FORMAT_ROOT   "mkfs.ext4 /dev/mmcblk0p3"
+#define FORMAT_ROOT   "mke2fs -T ext4 -L root /dev/mmcblk0p3"
 
 
 #define MOUNT_KERNEL_PATH2   "mount /dev/mmcblk0p6 /mnt/"
 #define MOUNT_APP_PATH2   "mount /dev/mmcblk0p7 /mnt/"
-#define FORMAT_ROOT2   "mkfs.ext4 /dev/mmcblk0p7"
+#define FORMAT_ROOT2   "mke2fs -T ext4 -L root2 /dev/mmcblk0p7"
 
 
 /*zip package path*/
