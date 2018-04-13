@@ -453,7 +453,8 @@ int WriteKernelFn()
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path success!\n");
 				}else {
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne2 path failed!\n");
-				goto mount_err;
+				umount("/mnt");
+				return INSTALL_CORRUPT;
 			}
 	}else{
 		/*a5-->system-B boot,update system-A*/
@@ -463,8 +464,9 @@ int WriteKernelFn()
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path success!\n");
 				}else {
 				fprintf(serial_fp,"[WriteKernelFn] Mount kerne1 path failed!\n");
-				goto mount_err;
-		}
+				umount("/mnt");
+				return INSTALL_CORRUPT;
+			}
 	}
 	/*access whether kernel_file exist */
 	if(access(Kernel_File, F_OK) == 0){
@@ -486,12 +488,13 @@ int WriteKernelFn()
 		pox_system("rm -rf /kernel_tmp");
 	}else{
 		fprintf(serial_fp,"[WriteKernelFn] no Kernel file !\n");
+		return INSTALL_CORRUPT;
 	}
-mount_err:
+
 	if(0==umount("/mnt")){
 		fprintf(serial_fp,"[WriteKernelFn] umount /mnt success!\n");
 	}
-	return 0;
+	return INSTALL_SUCCESS;
 }
 
 
@@ -508,7 +511,8 @@ int WriteAppFn()
 				fprintf(serial_fp,"[WriteAppFn] Mount root2 path success!\n");
 			}else {
 				fprintf(serial_fp,"[WriteAppFn] Mount root2 path failed!\n");
-				goto mount_err;
+				umount("/mnt");
+				return INSTALL_CORRUPT;
 			}
 	}else{
 		/*a5-->system-B boot,update system-A*/
@@ -518,7 +522,8 @@ int WriteAppFn()
 				fprintf(serial_fp,"[WriteAppFn] Mount root path success!\n");
 			}else {
 				fprintf(serial_fp,"[WriteAppFn] Mount root path failed!\n");
-				goto mount_err;
+				umount("/mnt");
+				return INSTALL_CORRUPT;
 			}
 	}
 	/*access if App_File exist */
@@ -531,13 +536,13 @@ int WriteAppFn()
 		fprintf(serial_fp,"[WriteAppFn] update App success !\n");
 	}else{
 		fprintf(serial_fp,"[WriteAppFn] no App file !\n");
+		return INSTALL_CORRUPT;
 	}
 
-mount_err:
 	if(0==umount("/mnt")){
 		fprintf(serial_fp,"[WriteAppFn] umount /mnt success!\n");
 	}
-	return 0;
+	return INSTALL_SUCCESS;
 }
 
 
@@ -555,6 +560,7 @@ int WriteRootfsFn()
 			fprintf(serial_fp,"[WriteRootfsFn] Format root2 success!\n");
 		}else{
 			fprintf(serial_fp,"[WriteRootfsFn] Format root2 failed!\n");
+			return INSTALL_ERROR;
 		}
 
 		ret=pox_system(MOUNT_APP_PATH2);
@@ -562,7 +568,8 @@ int WriteRootfsFn()
 			fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path success!\n");
 		}else {
 			fprintf(serial_fp,"[WriteRootfsFn] Mount root2 path failed!\n");
-			goto mount_err;
+			umount("/mnt");
+			return INSTALL_CORRUPT;
 		}
 
 	}else{
@@ -573,6 +580,7 @@ int WriteRootfsFn()
 			fprintf(serial_fp,"[WriteRootfsFn] Format root success!\n");
 		}else{
 			fprintf(serial_fp,"[WriteRootfsFn] Format root failed!\n");
+			return INSTALL_ERROR;
 		}
 
 		ret=pox_system(MOUNT_APP_PATH);
@@ -580,7 +588,8 @@ int WriteRootfsFn()
 			fprintf(serial_fp,"[WriteRootfsFn] Mount root path success!\n");				
 		}else {
 			fprintf(serial_fp,"[WriteRootfsFn] Mount root path failed!\n");
-			goto mount_err;
+			umount("/mnt");
+			return INSTALL_CORRUPT;
 		}
 	}
 	/*access if Rootfs_File exist */
@@ -598,11 +607,10 @@ int WriteRootfsFn()
 		fprintf(serial_fp,"[WriteRootfsFn] no Rootfs file !\n");
 	}
 
-mount_err:
 	if(0==umount("/mnt")){
 		fprintf(serial_fp,"[WriteRootfsFn] umount /mnt success!\n");
 	}
-	return 0;
+	return INSTALL_SUCCESS;
 }
 
 int caculate_partition(void)
@@ -624,8 +632,7 @@ int caculate_partition(void)
 int	main(int argc, char **argv) {
 	const char *send_intent = NULL;
     const char *update_package = NULL;
-    int  wipe_cache = 0;
-    int status = INSTALL_SUCCESS;
+    int status ;
 	int flag=0;
 	
 	pox_system("mount -o remount rw /");
@@ -652,24 +659,37 @@ int	main(int argc, char **argv) {
 		/*mount udisk*/
 		mount_device(udisk,mount_point,"vfat");
 		/*find update.zip*/
+		/*
 		if(-1==find_update_zip()){
 			fprintf(serial_fp, "[recovery]can`t find update.zip\n");
 			umount(mount_point);
 			return EXIT_FAILURE;
-		}	
-        fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);	
-    }else{
+		}*/
+		fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
+	}else{
 		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
 		return EXIT_FAILURE;
 	}
 
 	//WriteUbootFn(Uboot_Name,Uboot_Path);
 	//WriteM3Fn(M3_File,M3_Path);
-	WriteKernelFn();
-	WriteAppFn();
+	status=WriteKernelFn();
+	if(status != INSTALL_SUCCESS){
+		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
+		return EXIT_FAILURE;
+	}
+	status=WriteAppFn();
+	if(status != INSTALL_SUCCESS){
+		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
+		return EXIT_FAILURE;
+	}
 	if (access(Rootfs_File, F_OK) ==0) {
-		WriteRootfsFn();
+		status=WriteRootfsFn();
+		if(status != INSTALL_SUCCESS){
+		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
+		return EXIT_FAILURE;
 		}
+	}
 	/*update update.zip*/
 	/*
 	if(status == INSTALL_SUCCESS) {
@@ -708,16 +728,7 @@ int	main(int argc, char **argv) {
 		}
 	}
 
-	if (status == INSTALL_SUCCESS){
-		fprintf(serial_fp, "[recovery]recovery finished\n");
-	}else{ 	
-		fprintf(serial_fp, "[recovery]recovery failed\n");
-        fprintf(serial_fp, "[recovery]For more log information, please check %s now\n", TEMPORARY_LOG_FILE);    	 
-		}
-	if(0==umount("/sdcard")){
-		remove("/sdcard");
-		fprintf(serial_fp, "[recovery]umount /sdcard done...\n");
-	}
-	//pox_system("reboot");
+	fprintf(serial_fp, "[recovery]recovery finished\n");
+	pox_system("reboot");
     return EXIT_SUCCESS;
 }
