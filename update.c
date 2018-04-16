@@ -1,5 +1,35 @@
 #include "update.h"
 
+#define SET_BIT(x,i) ((x)|(1<<(i)))
+#define GET_BIT(x,i) (1 & (x)>>i)
+static unsigned char update_check_flag ='\0';
+static unsigned char update_done_flag ='\0';
+
+unsigned char UpdateCheck()
+{
+		if (access(Uboot_File, F_OK) == 0)
+		{
+		update_check_flag = SET_BIT(update_check_flag, UCB_UBOOT);
+		}
+		if(access(Kernel_File, F_OK) == 0)
+		{
+			update_check_flag = SET_BIT(update_check_flag, UCB_KERNEL);
+		}
+		if(access(App_File, F_OK) == 0)
+		{
+			update_check_flag = SET_BIT(update_check_flag, UCB_APP);
+		}
+		if(access(Rootfs_File, F_OK) == 0)
+		{
+			update_check_flag = SET_BIT(update_check_flag, UCB_ROOTFS);
+		}
+		if (access(M3_File, F_OK) == 0) {
+			update_check_flag = SET_BIT(update_check_flag, UCB_M3);
+		}
+        fprintf(serial_fp,"[UpdateCheck]Update Flag:%02X\n", update_check_flag);
+		return update_check_flag;
+}
+
 #define RFLAG_ADDR		0x0027f000 /* 2.5MB-4096 */
 #define RFLAG_START		0x5a
 #define RFLAG_FINISH	0xa5
@@ -485,7 +515,8 @@ int WriteKernelFn()
 		pox_system("sync");
 		copy_file("/kernel_tmp/csrvisor.bin","/mnt/csrvisor.bin");
 		fprintf(serial_fp,"[WriteKernelFn] update Kernel success !\n");
-		pox_system("rm -rf /kernel_tmp");
+		//pox_system("rm -rf /kernel_tmp");
+		remove("/kernel_tmp");
 	}else{
 		fprintf(serial_fp,"[WriteKernelFn] no Kernel file !\n");
 		return INSTALL_CORRUPT;
@@ -601,7 +632,8 @@ int WriteRootfsFn()
 		pox_system(cmd_line);
 		pox_system("cp /rootfs_tmp/rootfs/* -rf /mnt");
 		pox_system("sync");
-		pox_system("rm -rf /rootfs_tmp");
+		//pox_system("rm -rf /rootfs_tmp");
+		remove("/rootfs_tmp");
 		fprintf(serial_fp,"[WriteRootfsFn] update rootfs success!\n");
 	}else{
 		fprintf(serial_fp,"[WriteRootfsFn] no Rootfs file !\n");
@@ -613,7 +645,7 @@ int WriteRootfsFn()
 	return INSTALL_SUCCESS;
 }
 
-int caculate_partition(void)
+int caculate_partition_num(void)
 {
 	char DEVICE_NAME[32];
 	int num=0,i=0;
@@ -625,10 +657,61 @@ int caculate_partition(void)
 			num=i;	
 		}
 	}	
-	fprintf(serial_fp, "[caculate_partition] get the last partition num is %d!\n",num);
+	fprintf(serial_fp, "[caculate_partition_num] get the last partition num is %d!\n",num);
 	return num;
 }
+int UpdateAll()
+{
+	unsigned char update_flag='\0';
+	int i,ret;
+	int update_needed=0;
+	int update_done=-1;
 
+	update_flag=UpdateCheck();
+	for (i=0;i<UCB_MAX;i++)
+	{
+		update_needed=GET_BIT(update_flag,i);
+		if(update_needed)
+		{
+			fprintf(serial_fp,"[UpdateAll]get bit %d of update_flag, max %d\n",i,UCB_MAX);
+			switch(i)
+			{
+				case UCB_UBOOT:
+					fprintf(serial_fp,"[UpdateAll]uboot update!\n");
+					//WriteUbootFn(Uboot_File,Uboot_Path);
+					//update_done_flag = SET_BIT(update_done_flag, UCB_UBOOT);
+					break;
+				case UCB_KERNEL:
+					fprintf(serial_fp,"[UpdateAll]updating kernel...!\n");
+					ret=WriteKernelFn();
+					if(ret != INSTALL_SUCCESS){
+						fprintf(serial_fp, "[UpdateAll]update kernel failed !\n");}
+					update_done_flag = SET_BIT(update_done_flag, UCB_KERNEL);
+					break;
+				case UCB_APP:
+					fprintf(serial_fp,"[UpdateAll]updating app...!\n");
+					ret=WriteAppFn();
+					if(ret != INSTALL_SUCCESS){
+						fprintf(serial_fp, "[UpdateAll]update app failed !\n");}
+					update_done_flag = SET_BIT(update_done_flag, UCB_APP);
+					break;
+				case UCB_ROOTFS:
+					fprintf(serial_fp,"[UpdateAll]updating rootfs...!\n");
+					ret=WriteRootfsFn();
+					if(ret != INSTALL_SUCCESS){
+						fprintf(serial_fp, "[UpdateAll]update rootfs failed !\n");}
+					update_done_flag = SET_BIT(update_done_flag, UCB_ROOTFS);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+	if(update_flag != update_done_flag)
+		return INSTALL_ERROR;
+	return INSTALL_SUCCESS;
+
+}
 int	main(int argc, char **argv) {
 	const char *send_intent = NULL;
     const char *update_package = NULL;
@@ -671,8 +754,10 @@ int	main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	//WriteUbootFn(Uboot_Name,Uboot_Path);
+	status=UpdateAll();
+	//WriteUbootFn(Uboot_File,Uboot_Path);
 	//WriteM3Fn(M3_File,M3_Path);
+	/*
 	status=WriteKernelFn();
 	if(status != INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
@@ -690,10 +775,11 @@ int	main(int argc, char **argv) {
 		return EXIT_FAILURE;
 		}
 	}
+	*/
 	/*update update.zip*/
 	/*
 	if(status == INSTALL_SUCCESS) {
-		user_partno = caculate_partition();
+		user_partno = caculate_partition_num();
 		sprintf(user_part, "%sp%d", target_media,user_partno);
 	    mkdir("/user", 0755);
             if (mount(user_part, "/user", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
@@ -711,7 +797,7 @@ int	main(int argc, char **argv) {
 		update_bt();
 	}
 
-	finish_recovery(send_intent);
+	//finish_recovery(send_intent);
 
 	if (status == INSTALL_SUCCESS){
 		flag=get_flag(target_media, RFLAG_ADDR);
@@ -729,6 +815,6 @@ int	main(int argc, char **argv) {
 	}
 
 	fprintf(serial_fp, "[recovery]recovery finished\n");
-	pox_system("reboot");
+	//pox_system("reboot");
     return EXIT_SUCCESS;
 }
