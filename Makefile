@@ -1,4 +1,4 @@
 all:
-	arm-linux-gnueabihf-gcc common.c update.c -o update11
+	arm-linux-gnueabihf-gcc common.c update.c -o update
 clean:
-	rm update11
+	rm update
