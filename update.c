@@ -755,27 +755,6 @@ int	main(int argc, char **argv) {
 	}
 
 	status=UpdateAll();
-	//WriteUbootFn(Uboot_File,Uboot_Path);
-	//WriteM3Fn(M3_File,M3_Path);
-	/*
-	status=WriteKernelFn();
-	if(status != INSTALL_SUCCESS){
-		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
-		return EXIT_FAILURE;
-	}
-	status=WriteAppFn();
-	if(status != INSTALL_SUCCESS){
-		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
-		return EXIT_FAILURE;
-	}
-	if (access(Rootfs_File, F_OK) ==0) {
-		status=WriteRootfsFn();
-		if(status != INSTALL_SUCCESS){
-		fprintf(serial_fp, "[recovery]update failed !\n exit update!\n");
-		return EXIT_FAILURE;
-		}
-	}
-	*/
 	/*update update.zip*/
 	/*
 	if(status == INSTALL_SUCCESS) {
