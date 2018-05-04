@@ -741,35 +741,12 @@ int	main(int argc, char **argv) {
 		fprintf(serial_fp, "[recovery]udisk exists\n");
 		/*mount udisk*/
 		mount_device(udisk,mount_point,"vfat");
-		/*find update.zip*/
-		/*
-		if(-1==find_update_zip()){
-			fprintf(serial_fp, "[recovery]can`t find update.zip\n");
-			umount(mount_point);
-			return EXIT_FAILURE;
-		}*/
 		fprintf(serial_fp, "[recovery]Recovery from %s to %s\n",source_media, target_media);
 	}else{
 		fprintf(serial_fp, "[recovery]can`t find udisk !\n");
 		return EXIT_FAILURE;
 	}
-
 	status=UpdateAll();
-	/*update update.zip*/
-	/*
-	if(status == INSTALL_SUCCESS) {
-		user_partno = caculate_partition_num();
-		sprintf(user_part, "%sp%d", target_media,user_partno);
-	    mkdir("/user", 0755);
-            if (mount(user_part, "/user", "vfat", MS_NOATIME | MS_NODEV | MS_NODIRATIME, "") < 0) {
-		fprintf(serial_fp, "[recovery]mount %s to /user failed!\n",user_part);
-	    } else {
-		mkdir("/user/update",0755);
-		copy_file(update_package, UPDATEZIP_PATH);
-	        fprintf(serial_fp, "[recovery]copy update.zip done!\n");
-	    }
-		remove("/user");
-	}*/
 	/*update BT files*/
 	if(status == INSTALL_SUCCESS){
 		fprintf(serial_fp, "[recovery]updating bt!\n");
@@ -777,7 +754,6 @@ int	main(int argc, char **argv) {
 	}
 
 	//finish_recovery(send_intent);
-
 	if (status == INSTALL_SUCCESS){
 		flag=get_flag(target_media, RFLAG_ADDR);
 		if(flag==RFLAG_START){
