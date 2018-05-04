@@ -18,8 +18,8 @@
 #define VAL_STRING  1  // data will be NULL-terminated; size doesn't count null
 #define VAL_BLOB    2
 #define COMMIT_FLAG_ADDR 0x200000
-char *Uboot_Name = "/media/disk/update/u-boot.csr";
-char *Uboot_Path = "/dev/nandblk0";
+//char *Uboot_Name = "/media/disk/update/u-boot.csr";
+//char *Uboot_Path = "/dev/nandblk0";
 typedef struct {
     int type;
     ssize_t size;
@@ -36,7 +36,7 @@ Value* StringValue(char* str) {
 }
 /*write_uboot("/tmp/u-boot.csr","/dev/nandblk0")!="/dev/nandblk0",*/
 // write_uboot(file, partition)
-Value* WriteUbootFn(char* filename,char* partition) {
+Value* WriteUbootFn(char* partition,char* filename) {
     char* result = NULL;    
     long write_position;
     bool is_emmc = false;
@@ -204,13 +204,24 @@ done:
 		free(partition);
     	free(filename);
 		}
-	fprintf(stderr, "[WriteUbootFn]before return \n");
+	fprintf(stderr, "[WriteUbootFn]write u-boot.csr successed! \n");
     return StringValue(result);
 }
 
-
-int main(int argc, char **argv)
+void print_usage(void)
 {
-	WriteUbootFn(Uboot_Name,Uboot_Path);
+	printf("Usage:\n");
+	printf("NAND version:\n./WriteUbootFn /dev/nandblk0 u-boot.csr\n");
+	printf("eMMC version:\n./WriteUbootFn /dev/mmcblk0 u-boot.csr\n");
+}
+int main(int argc, char *argv[])
+{
+    if(argc!=3){
+        printf("wrong num of args!\n");
+	    print_usage();
+        return -1;
+    }else{
+	    WriteUbootFn(argv[1],argv[2]);
+    }
 return 0;
 }
